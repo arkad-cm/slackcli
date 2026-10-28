@@ -17,8 +17,8 @@ The writing commands support it too — `messages send`, `messages edit`, `messa
 `messages react`, `messages unreact`, `messages draft`, `messages send-draft`, `messages delete-draft`, `messages schedule`,
 `messages delete-scheduled`, `emoji add`, `emoji remove`, `canvas create`, `canvas edit`, the `saved` write verbs
 (`add`, `update`, `complete`, `reopen`, `remove`), the `usergroups` write verbs (`create`, `update`, `add`,
-`remove`, `enable`, `disable`), the `conversations` membership write/self
-verbs (`members add`, `members remove`, `join`, `leave`), and
+`remove`, `enable`, `disable`), the `conversations` write and self
+verbs (`create`, `members add`, `members remove`, `join`, `leave`), and
 `conversations mark-read` — where it returns the
 identity of what was just written instead of the human success line.
 
@@ -137,7 +137,7 @@ list` returns plain IDs, so it has no `--fields`.
 Every command that changes something in Slack takes `--dry-run`:
 `messages send`, `edit`, `delete`, `react`, `unreact`, `draft`, `send-draft`, `delete-draft`,
 `schedule`, `delete-scheduled`;
-`conversations members add`, `members remove`, `join`, `leave`, `mark-read`;
+`conversations create`, `members add`, `members remove`, `join`, `leave`, `mark-read`;
 `emoji add`, `remove`;
 `saved add`, `update`, `complete`, `reopen`, `remove`;
 `canvas create`, `edit`; and
@@ -172,7 +172,7 @@ With `--json` the preview is one object on stdout:
 - `action` names the write: `send message`, `edit message`, `add reaction`, `remove reaction`,
   `create draft`, `send draft`, `delete draft`, `schedule message`,
   `delete scheduled message`, `add channel members`,
-  `remove channel members`, `join channel`, `leave channel`,
+  `remove channel members`, `create channel`, `join channel`, `leave channel`,
   `mark conversation read`, `add emoji`, `add emoji alias`, `remove emoji`,
   `add saved item`, `update saved item`, `complete saved item`, `reopen saved item`, `remove saved item`,
   `create user group`, `update user group`, `add user group members`,
@@ -186,7 +186,8 @@ With `--json` the preview is one object on stdout:
   set as `ids` instead of a single `id`, with no name lookup),
   `message` (with `ts`), `draft`, `scheduled_message`, `emoji` or `usergroup`. `thread_ts` is set for a
   thread reply. `name` (`#channel`, `@user`, the group's name) is looked up
-  for display and left out when the lookup fails.
+  for display and left out when the lookup fails. For `conversations create`
+  the `channel` target has no `id` yet, only the `name` to be created.
 - `payload` is exactly what would be sent: the message `text` and `blocks`;
   `post_at` (Unix seconds) for a scheduled message, and for cancelling one the
   `channel_id` and `post_at` of the message found;

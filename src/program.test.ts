@@ -53,6 +53,7 @@ const SLACK_WRITES = new Set([
   'slackcli messages delete-scheduled',
   'slackcli conversations members add',
   'slackcli conversations members remove',
+  'slackcli conversations create',
   'slackcli conversations join',
   'slackcli conversations leave',
   'slackcli conversations mark-read',
