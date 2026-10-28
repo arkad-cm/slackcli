@@ -157,6 +157,47 @@ export interface SlackDraftListResponse {
   has_more?: boolean;
 }
 
+// Slack list records (lists.records.list, lists.records.info). Only the parts the
+// CLI reads are typed. A cell carries the value key that matches its column type.
+export interface SlackListCell {
+  column_id: string;
+  key?: string;
+  value?: string | number;
+  text?: string;
+  rich_text?: unknown[];
+  select?: string[];
+  user?: string[];
+  number?: number[];
+  date?: number[];
+  timestamp?: number[];
+}
+
+export interface SlackListRecord {
+  id: string;
+  list_id?: string;
+  fields?: SlackListCell[];
+  date_created?: number;
+  updated_timestamp?: number;
+}
+
+export interface SlackListColumn {
+  id: string;
+  name?: string;
+  type?: string;
+}
+
+export interface SlackListRecordsResponse {
+  ok: boolean;
+  records?: SlackListRecord[];
+  response_metadata?: { next_cursor?: string };
+}
+
+export interface SlackListRecordResponse {
+  ok: boolean;
+  record?: SlackListRecord;
+  list?: { list_metadata?: { schema?: SlackListColumn[] } };
+}
+
 // Stable, explicit projection emitted by `messages list-drafts`. Do not expose
 // Slack's raw draft object: this endpoint is undocumented and may add or change
 // internal fields without notice.

@@ -110,6 +110,14 @@ class TestSlackClient extends SlackClient {
       };
     }
 
+    if (method === 'lists.records.list') {
+      return { ok: true, records: [], response_metadata: { next_cursor: '' } };
+    }
+
+    if (method === 'lists.records.info') {
+      return { ok: true, record: { id: params.id, list_id: params.list_id, fields: [] } };
+    }
+
     throw new Error(`Unexpected method: ${method}`);
   }
 }
@@ -720,6 +728,51 @@ describe('SlackClient.getPermalink', () => {
     expect(response.permalink).toBe(
       'https://example.slack.com/archives/C123/p1234567890123456',
     );
+  });
+});
+
+describe('SlackClient list reads', () => {
+  it('calls lists.records.list with the list ID, and a cursor only when one is given', async () => {
+    const client = new TestSlackClient();
+
+    await client.listRecords('F0123456789');
+    await client.listRecords('F0123456789', { cursor: 'next-page' });
+
+    expect(client.calls).toEqual([
+      { method: 'lists.records.list', params: { list_id: 'F0123456789' } },
+      { method: 'lists.records.list', params: { list_id: 'F0123456789', cursor: 'next-page' } },
+    ]);
+  });
+
+  it('calls lists.records.info with the list ID and the record ID as id', async () => {
+    const client = new TestSlackClient();
+
+    await client.getListRecord('F0123456789', 'Rec0123456789');
+
+    expect(client.calls).toEqual([{
+      method: 'lists.records.info',
+      params: { list_id: 'F0123456789', id: 'Rec0123456789' },
+    }]);
+  });
+
+  it('fails before making a request when the workspace uses standard authentication', async () => {
+    const client = new SlackClient({
+      workspace_id: 'T123',
+      workspace_name: 'Test Workspace',
+      auth_type: 'standard',
+      token: 'xoxb-test',
+      token_type: 'bot',
+    });
+
+    await expect(client.listRecords('F0123456789'))
+      .rejects.toThrow('Reading lists requires browser authentication');
+    await expect(client.getListRecord('F0123456789', 'Rec0123456789'))
+      .rejects.toThrow('Reading lists requires browser authentication');
+  });
+
+  it('treats both list reads as read methods, so a transport error is retried', () => {
+    expect(isReadMethod('lists.records.list')).toBe(true);
+    expect(isReadMethod('lists.records.info')).toBe(true);
   });
 });
 

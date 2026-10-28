@@ -8,7 +8,7 @@ hand.
 Every read command supports `--json`: `conversations list`, `conversations read`,
 `conversations get`, `conversations unread`, `conversations members list`,
 `search messages`, `search files`, `search channels`,
-`search people`, `saved list`, `canvas list`, `canvas read`, `canvas sections`, `team info`,
+`search people`, `saved list`, `canvas list`, `canvas read`, `canvas sections`, `lists read`, `lists record`, `team info`,
 `usergroups list`, `usergroups read`, `emoji list`, `emoji get`, `files info`,
 `files read`, `users info`, `users list`, `messages list-drafts`,
 `messages list-scheduled`, `auth whoami`, `auth list`.
@@ -122,6 +122,8 @@ Useful field sets, and what each command projects:
 | `canvas list` | each of `canvases` | `id,title,permalink` |
 | `canvas read` | the canvas record | `id,title,markdown` |
 | `canvas sections` | each of `sections` | `id` |
+| `lists read` | each of `records` | `id,fields` |
+| `lists record` | the record | `id,fields` |
 | `files info` | the file record | `id,name,mimetype,size,permalink` |
 | `files read` | the file record | `id,name,content` |
 | `emoji list` | each of `emoji` | `name,url` |
