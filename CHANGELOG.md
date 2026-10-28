@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`lists read` and `lists record`**: read-only access to Slack lists, with a browser login. `lists read <list>` returns every record of a list, across all pages. `lists record <list> <record-id>` returns one record, with column names when Slack sends the schema. `<list>` takes a list file ID or a Slack list URL. Both take `--json` and `--fields` (#469)
+
 ## [0.18.0] - 2026-10-28
 
 ### Added

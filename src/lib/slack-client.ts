@@ -9,6 +9,8 @@ import type {
   ScheduledMessageSummary,
   SavedItemUpdate,
   SlackDraftListResponse,
+  SlackListRecordResponse,
+  SlackListRecordsResponse,
   SlackScheduledMessage,
   SlackScheduledMessageListResponse,
   WorkspaceConfig,
@@ -293,6 +295,7 @@ export async function checkUploadFile(filePath: string): Promise<{ filename: str
 export const DRAFT_CREATE_AUTH_MESSAGE = 'Draft creation requires browser authentication';
 export const DRAFT_LIST_AUTH_MESSAGE = 'Draft listing requires browser authentication';
 export const DRAFT_DELETE_AUTH_MESSAGE = 'Draft deletion requires browser authentication';
+export const LIST_AUTH_MESSAGE = 'Reading lists requires browser authentication';
 export const UNREAD_MESSAGES_AUTH_MESSAGE = 'Reading unread messages (--messages) requires browser authentication';
 
 // Custom-emoji writes use Slack's web-client emoji.add/emoji.remove endpoints,
@@ -779,6 +782,23 @@ export class SlackClient {
       draft_id: draftId,
       client_last_updated_ts: (Date.now() / 1000).toFixed(7),
     });
+  }
+
+  // List records (browser auth only). Pages come back with next_cursor, which is
+  // empty on the last page; lists.ts follows them.
+  async listRecords(listId: string, options: { cursor?: string } = {}): Promise<SlackListRecordsResponse> {
+    this.requireBrowserAuth(LIST_AUTH_MESSAGE);
+
+    const params: Record<string, any> = { list_id: listId };
+    if (options.cursor) params.cursor = options.cursor;
+    return this.request('lists.records.list', params);
+  }
+
+  // One record of a list (browser auth only). Slack takes the record ID as `id`.
+  async getListRecord(listId: string, recordId: string): Promise<SlackListRecordResponse> {
+    this.requireBrowserAuth(LIST_AUTH_MESSAGE);
+
+    return this.request('lists.records.info', { list_id: listId, id: recordId });
   }
 
   // Schedule a message for later (standard auth only). Like chat.postMessage,

@@ -19,7 +19,7 @@ Condensed from https://github.com/shaharia-lab/slackcli/tree/main/docs/user-guid
   `users list --fields id,name,email`. Bad list or no `--json`: exit 1 `invalid_input`.
 - `--workspace <id|name>`: every Slack command. Accepts profile key, `--profile`
   name, `T…` ID, or workspace name. Ambiguous name: command stops, pass the profile.
-- IDs accept Slack URLs (channel, DM, user, canvas, file). Timestamps accept
+- IDs accept Slack URLs (channel, DM, user, canvas, list, file). Timestamps accept
   `p1234567890123456`, `1234567890123456`, `1234567890.123456`.
 - `--permalink <url>` replaces channel + timestamp on `messages send|react|unreact|edit|delete|draft`,
   `saved add|update|complete|reopen|remove`, `conversations read|get|mark-read`. A reply link targets the parent thread
@@ -162,6 +162,13 @@ emoji list [--filter=SUBSTR] [--limit=N] [--no-aliases] [--json]   |   emoji get
 emoji add <name> (--file=PATH | --alias-for=NAME) [--json]   |   emoji remove <name> [--yes] [--json]   # browser auth only; remove is retry-safe
 update check   |   update                               # refuses under Homebrew / from source
 logs path [--json]   |   logs show [--last=N | --run=ID] [--json]   |   logs clear [--yes]   # log is redacted
+```
+
+## lists
+
+```
+lists read <F…|url> [--json] [--fields=…]              # browser auth only; every record, raw column IDs
+lists record <F…|url> <Rec…> [--json] [--fields=…]     # browser auth only; one record, column names resolved
 ```
 
 ## Recipes

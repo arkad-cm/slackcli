@@ -22,6 +22,8 @@ const BROWSER_ONLY = new Set([
   'slackcli saved complete',
   'slackcli saved reopen',
   'slackcli saved remove',
+  'slackcli lists read',
+  'slackcli lists record',
 ]);
 
 // Commands that only work with a standard app token (#379, #431): Slack refuses
