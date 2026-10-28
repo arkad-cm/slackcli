@@ -161,6 +161,20 @@ describe('listCellUpdateOf', () => {
     expect(listCellUpdateOf(row, column, 'checkbox', 'false')).toEqual({ row_id: row, column_id: column, checkbox: false });
   });
 
+  it('builds the to-do list columns with the checkbox, user and date shapes', () => {
+    expect(listCellUpdateOf(row, column, 'todo_completed', 'true')).toEqual({ row_id: row, column_id: column, checkbox: true });
+    expect(listCellUpdateOf(row, column, 'todo_assignee', 'U0123456789')).toEqual({
+      row_id: row,
+      column_id: column,
+      user: ['U0123456789'],
+    });
+    expect(listCellUpdateOf(row, column, 'todo_due_date', '2026-10-30')).toEqual({
+      row_id: row,
+      column_id: column,
+      date: ['2026-10-30'],
+    });
+  });
+
   it('builds a user cell from a comma list of user IDs under the user key', () => {
     expect(listCellUpdateOf(row, column, 'user', 'U0123456789, W0123456789')).toEqual({
       row_id: row,

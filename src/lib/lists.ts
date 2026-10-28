@@ -18,6 +18,8 @@ export function columnTypeOf(schema: SlackListColumn[] | undefined, columnId: st
  * column's schema type. Each type checks its value first, so a bad value fails
  * before any request. The column types that can be set are text, checkbox, user,
  * date and number; `user` takes comma-separated user IDs, and `date` takes YYYY-MM-DD.
+ * A to-do list's own columns (todo_completed, todo_assignee, todo_due_date) take the
+ * checkbox, user and date shapes.
  */
 export function listCellUpdateOf(rowId: string, columnId: string, columnType: string, value: string): ListCellUpdate {
   const cell = { row_id: rowId, column_id: columnId };
@@ -28,18 +30,21 @@ export function listCellUpdateOf(rowId: string, columnId: string, columnType: st
         rich_text: [{ type: 'rich_text', elements: [{ type: 'rich_text_section', elements: [{ type: 'text', text: value }] }] }],
       };
     case 'checkbox':
+    case 'todo_completed':
       if (value !== 'true' && value !== 'false') {
         throw new InvalidInputError('A checkbox cell takes "true" or "false".');
       }
       return { ...cell, checkbox: value === 'true' };
-    case 'user': {
+    case 'user':
+    case 'todo_assignee': {
       const users = value.split(',').map((id) => id.trim()).filter(Boolean);
       if (users.length === 0 || users.some((id) => !/^[UW][A-Z0-9]+$/.test(id))) {
         throw new InvalidInputError('A user cell takes one or more user IDs (U... or W...), separated by commas.');
       }
       return { ...cell, user: users };
     }
-    case 'date': {
+    case 'date':
+    case 'todo_due_date': {
       const day = new Date(`${value}T00:00:00Z`);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(day.getTime()) || day.toISOString().slice(0, 10) !== value) {
         throw new InvalidInputError('A date cell takes a real date as YYYY-MM-DD.');
@@ -53,7 +58,7 @@ export function listCellUpdateOf(rowId: string, columnId: string, columnType: st
     }
     default:
       throw new InvalidInputError(
-        `Column type "${columnType}" cannot be set with lists edit-cell. Settable types: text, checkbox, user, date, number.`,
+        `Column type "${columnType}" cannot be set with lists edit-cell. Settable types: text, checkbox, user, date, number, and the to-do columns.`,
       );
   }
 }

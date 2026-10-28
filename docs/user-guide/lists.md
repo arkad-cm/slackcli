@@ -63,12 +63,12 @@ There is no `--type` flag. The CLI reads the column's type from the list schema,
 | Column type | `--value` |
 |---|---|
 | `text` | Any string, stored as one rich-text section |
-| `checkbox` | `true` or `false` |
-| `user` | One or more user IDs (`U...` or `W...`), separated by commas |
-| `date` | A real date as `YYYY-MM-DD` |
+| `checkbox`, `todo_completed` | `true` or `false` |
+| `user`, `todo_assignee` | One or more user IDs (`U...` or `W...`), separated by commas |
+| `date`, `todo_due_date` | A real date as `YYYY-MM-DD` |
 | `number` | A finite number |
 
-A column type other than these five is refused, and so is a column ID the schema does not list. Both fail before the write, and `--dry-run` shows the resolved type in its payload. Get the column ID from `lists read` (the cell's `column_id`) or from `lists record`.
+The `todo_*` types are the built-in columns of a to-do list. Any other column type is refused, and so is a column ID the schema does not list. Both fail before the write, and `--dry-run` shows the resolved type in its payload. Get the column ID from `lists read` (the cell's `column_id`) or from `lists record`.
 
 ## Delete a row
 
