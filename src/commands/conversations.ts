@@ -15,6 +15,7 @@ import {
 } from '../lib/unread-messages.ts';
 import { markConversationRead, previousLastRead } from '../lib/mark-read.ts';
 import { processReadPage, resolveSelfIdentity } from '../lib/poll.ts';
+import { fetchThreadReplies } from '../lib/thread-parent.ts';
 import { confirmWrite } from './usergroups.ts';
 import {
   normalizeTimestamp,
@@ -133,7 +134,8 @@ const HELP = {
         '--permalink alone; combining --permalink with either is an error.',
       CHANNEL_NAME_NOTE,
       '--permalink with a channel link reads the channel; with a message link it reads that message\'s thread ' +
-        '(the parent thread when the link points at a reply).',
+        '(the parent thread when the link points at a reply, with or without ?thread_ts=). --thread-ts may also ' +
+        'be a reply\'s timestamp; reading a reply\'s thread costs one extra Slack call.',
       'Timestamps (--thread-ts, --oldest, --latest): 1712345678.123456, p1712345678123456, 1712345678123456, ' +
         'or epoch seconds for --oldest/--latest.',
       'Only messages strictly newer than --oldest are shown. next_oldest is the newest ts Slack returned ' +
@@ -544,7 +546,7 @@ export function createConversationsCommand(): Command {
   // Read conversation history
   describeCommand(conversations.command('read'), HELP.read)
     .argument('[channel-id]', 'Channel ID, Slack URL or channel name to read from')
-    .option('--thread-ts <timestamp>', 'Read this thread (parent message timestamp) instead of the channel')
+    .option('--thread-ts <timestamp>', 'Read this thread instead of the channel (any message timestamp in it; a reply reads its whole thread)')
     .option('--permalink <url>', 'Slack link; reads that channel, or that message\'s thread (replaces <channel-id> and --thread-ts)')
     .option('--exclude-replies', 'Exclude threaded replies (only top-level messages)', false)
     .option('--exclude-self', 'Exclude messages sent by the authenticated user or bot', false)
@@ -575,7 +577,8 @@ export function createConversationsCommand(): Command {
         if (target.threadTs) {
           // Fetch thread replies
           spinner.text = 'Fetching thread replies...';
-          response = await client.getConversationReplies(channelId, target.threadTs, {
+          // A reply's ts reads the reply's whole thread, from its parent (#482).
+          response = await fetchThreadReplies(client, channelId, target.threadTs, {
             limit: Number.parseInt(options.limit),
             oldest,
             latest,
