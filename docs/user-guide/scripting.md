@@ -7,7 +7,7 @@ hand.
 
 Every read command supports `--json`: `conversations list`, `conversations read`,
 `conversations get`, `conversations unread`, `conversations members list`,
-`search messages`, `search channels`,
+`search messages`, `search files`, `search channels`,
 `search people`, `saved list`, `canvas list`, `canvas read`, `canvas sections`, `team info`,
 `usergroups list`, `usergroups read`, `emoji list`, `emoji get`, `files info`,
 `files read`, `users info`, `users list`, `messages list-drafts`,
@@ -111,6 +111,7 @@ Useful field sets, and what each command projects:
 | `conversations get` | `message` | `ts,user,text` |
 | `conversations unread` | each of `unread_channels` | `id,name,mention_count` (with `--messages`: `id,name,messages.ts,messages.user,messages.text`) |
 | `search messages` | each of `matches` | `ts,user,text,channel.name,permalink` |
+| `search files` | each of `files` | `id,name,permalink` |
 | `search channels` | each of `channels` | `id,name` |
 | `search people` | each of `people` | `id,name,real_name,profile.email` |
 | `users list` | each of `users` | `id,name,email` |

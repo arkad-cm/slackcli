@@ -115,6 +115,7 @@ refuses a cancel in the last 60 s before posting.
 
 ```
 search messages ["q"] [--in=chan] [--from=user] [--limit=20] [--page=1] [--sort=timestamp|score] [--sort-dir=desc|asc] [--json]
+search files ["q"] [--in=chan] [--from=user] [--limit=20] [--page=1] [--sort=timestamp|score] [--sort-dir=desc|asc] [--json]   # → {query,total,page,pages,files[]}; file id feeds files info|read|download
 search channels "q" [--limit=N] [--json]
 search people "q" [--limit=N] [--json]
 ```
