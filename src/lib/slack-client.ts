@@ -745,12 +745,10 @@ export class SlackClient {
     return this.request('files.completeUploadExternal', params);
   }
 
-  // Create draft message. `blocks` replaces the mrkdwn of `text`, and
-  // `date_scheduled` (Unix seconds) makes the draft a scheduled message (#474).
+  // Create draft message. `blocks` replaces the mrkdwn of `text`.
   async createDraft(channelId: string, text: string, options: {
     thread_ts?: string;
     blocks?: unknown[];
-    date_scheduled?: number;
   } = {}): Promise<any> {
     this.requireBrowserAuth(DRAFT_CREATE_AUTH_MESSAGE);
 
@@ -761,13 +759,12 @@ export class SlackClient {
       file_ids: '[]',
       is_from_composer: 'false',
     };
-    if (options.date_scheduled !== undefined) params.date_scheduled = options.date_scheduled;
 
     return this.request('drafts.create', params);
   }
 
-  // Set the destination, content and send time of an existing draft (#474). Used
-  // when drafts.create does not keep the schedule.
+  // Set the destination, content and send time of an existing draft (#474). The
+  // Slack web client sends is_from_composer as true when it schedules.
   async updateDraft(draftId: string, channelId: string, options: {
     thread_ts?: string;
     blocks: unknown[];
@@ -784,7 +781,7 @@ export class SlackClient {
       destinations: JSON.stringify(draftDestinations(channelId, options.thread_ts)),
       file_ids: '[]',
       date_scheduled: options.date_scheduled,
-      is_from_composer: 'false',
+      is_from_composer: 'true',
     });
   }
 

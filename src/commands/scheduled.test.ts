@@ -531,18 +531,7 @@ describe('scheduled messages (#379)', () => {
       id, date_created: 1791000000, date_scheduled: when, file_ids: [], destinations: [{ channel_id: channel }], blocks: textBlocks(text),
     });
 
-    it('schedules as a draft carrying date_scheduled, and prints the draft ID', async () => {
-      answers['drafts.create'] = (params) => ({ ok: true, draft: { id: 'Dr0123456789', date_scheduled: params.date_scheduled } });
-      const postAt = nowSeconds() + 3600;
-
-      const out = await runJson(['schedule', '--recipient-id', 'C0123456789', '--message', 'Standup', '--at', String(postAt)], BROWSER);
-
-      expect(out).toEqual({ channel_id: 'C0123456789', scheduled_message_id: 'Dr0123456789', post_at: postAt });
-      expect(methods()).toEqual(['drafts.create']);
-      expect(calls[0]?.params).toMatchObject({ date_scheduled: postAt });
-    });
-
-    it('sets the schedule with drafts.update when drafts.create leaves it off', async () => {
+    it('schedules as a draft, sets the time with drafts.update, and prints the draft ID', async () => {
       answers['drafts.create'] = { ok: true, draft: { id: 'Dr0123456789' } };
       answers['drafts.update'] = { ok: true };
       const postAt = nowSeconds() + 3600;

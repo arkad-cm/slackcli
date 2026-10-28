@@ -2356,20 +2356,23 @@ describe('SlackClient scheduled messages (#379)', () => {
       return { client, calls };
     }
 
-    it('schedules as a draft that carries date_scheduled, and returns the draft ID', async () => {
-      const { client, calls } = browserClient([{ ok: true, draft: { id: 'Dr1', date_scheduled: 1791791400 } }]);
+    // drafts.create refuses date_scheduled with scheduled_draft_cannot_be_attached,
+    // so the time goes on with drafts.update, as in the Slack web client.
+    it('creates a plain draft, sets its time with drafts.update, and returns the draft ID', async () => {
+      const { client, calls } = browserClient([{ ok: true, draft: { id: 'Dr1' } }, { ok: true }]);
 
       const response = await client.scheduleMessage('C123', 'Standup', 1791791400, { thread_ts: '1712345678.000100' });
 
       expect(response).toEqual({ scheduled_message_id: 'Dr1', post_at: 1791791400 });
-      expect(calls).toHaveLength(1);
-      expect(calls[0]).toMatchObject({
-        method: 'drafts.create',
-        params: { date_scheduled: 1791791400, file_ids: '[]', is_from_composer: 'false' },
-      });
-      expect(JSON.parse(String(calls[0]?.params.destinations))).toEqual([
-        { channel_id: 'C123', thread_ts: '1712345678.000100', broadcast: false },
-      ]);
+      expect(calls.map((call) => call.method)).toEqual(['drafts.create', 'drafts.update']);
+      expect(calls[0]?.params).toMatchObject({ file_ids: '[]', is_from_composer: 'false' });
+      expect(calls[0]?.params).not.toHaveProperty('date_scheduled');
+      expect(calls[1]?.params).toMatchObject({ draft_id: 'Dr1', date_scheduled: 1791791400 });
+      for (const call of calls) {
+        expect(JSON.parse(String(call.params.destinations))).toEqual([
+          { channel_id: 'C123', thread_ts: '1712345678.000100', broadcast: false },
+        ]);
+      }
     });
 
     it('sends the schedule, draft, channel and content to drafts.update', async () => {
@@ -2387,7 +2390,7 @@ describe('SlackClient scheduled messages (#379)', () => {
         destinations: '[{"channel_id":"C123"}]',
         date_scheduled: 1791791400,
         file_ids: '[]',
-        is_from_composer: 'false',
+        is_from_composer: 'true',
       });
       const timestamp = Number(calls[0]?.params.client_last_updated_ts);
       expect(timestamp).toBeGreaterThanOrEqual(before);

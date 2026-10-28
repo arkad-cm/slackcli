@@ -391,15 +391,15 @@ describe('scheduleDraft (#474)', () => {
     return { client: client as unknown as Parameters<typeof scheduleDraft>[0], calls };
   }
 
-  it('keeps the draft when drafts.create takes the schedule', async () => {
-    const { client, calls } = draftClient({ ok: true, draft: { id: 'Dr1', date_scheduled: POST_AT } });
+  it('creates the draft without a time, since drafts.create refuses one', async () => {
+    const { client, calls } = draftClient({ ok: true, draft: { id: 'Dr1' } });
 
-    expect(await scheduleDraft(client, input)).toEqual({ scheduled_message_id: 'Dr1', post_at: POST_AT });
-    expect(calls.map((call) => call.method)).toEqual(['createDraft']);
-    expect(calls[0].args[2]).toMatchObject({ thread_ts: '1712345678.000100', date_scheduled: POST_AT });
+    await scheduleDraft(client, input);
+    expect(calls[0].args[2]).toMatchObject({ thread_ts: '1712345678.000100' });
+    expect(calls[0].args[2]).not.toHaveProperty('date_scheduled');
   });
 
-  it('sets the schedule with drafts.update when drafts.create leaves it off', async () => {
+  it('sets the schedule with drafts.update', async () => {
     const { client, calls } = draftClient({ ok: true, draft: { id: 'Dr2' } });
 
     expect(await scheduleDraft(client, input)).toEqual({ scheduled_message_id: 'Dr2', post_at: POST_AT });
