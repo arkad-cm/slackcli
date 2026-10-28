@@ -1033,6 +1033,13 @@ export class SlackClient {
     return this.request('conversations.join', { channel });
   }
 
+  // Create a channel (conversations.create). Public unless isPrivate is set.
+  // Slack returns the new channel object; a taken or invalid name fails with
+  // name_taken or invalid_name_*, mapped in SLACK_CODE_MAP.
+  async createConversation(name: string, isPrivate: boolean): Promise<any> {
+    return this.request('conversations.create', { name, is_private: isPrivate });
+  }
+
   // Leave a conversation as the authenticated user. conversations.leave is a
   // self-op. On success Slack returns { ok: true }; when you were already out
   // it responds with { ok: false, not_in_channel: true } and NO `error` field,
