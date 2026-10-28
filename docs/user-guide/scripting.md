@@ -206,8 +206,7 @@ With `--json` the preview is one object on stdout:
 A dry run may make read calls (resolving a user group, reading its members,
 loading a draft, finding a scheduled message, naming the target) but no write call. A failure is the real
 command's failure: invalid input, a missing file, bad Block Kit JSON, an
-unknown group, a draft or `saved` write command on an app token or a scheduled-message command
-on a browser session exits `1` with the same error. **Slack checks permissions only on the real write**, so a dry run can
+unknown group, or a draft or `saved` write command on an app token, exits `1` with the same error. **Slack checks permissions only on the real write**, so a dry run can
 pass where the write is then refused (`missing_scope`, `not_in_channel`, …).
 
 ## Exit codes
@@ -249,7 +248,7 @@ failure line is left out, so that last line parses on its own:
 | `invalid_input` | A flag, argument, link or file the command cannot use (`--limit 0`, an ambiguous `--workspace`, a channel name or handle that matches more than one ID, bad `--blocks` JSON, a missing `--file`, a draft `send-draft` cannot send, a `--at` or `--in` that is unreadable, in the past or more than 120 days ahead (also Slack's `time_in_past`, `time_too_far`), a non-text file for `files read`, `invalid_ts`, …) | Fix the input |
 | `network` | Slack could not be reached, or answered with a 5xx | Retry |
 | `confirmation_required` | A write needs `--yes` when stdin is not a terminal, or the prompt was declined | Pass `--yes` once the write is confirmed |
-| `unsupported_auth_type` | The command needs the other auth type: drafts need browser auth, scheduled messages and the canvas sections, create and edit commands need an app token; Slack's `not_allowed_token_type` | Use a profile of the other type |
+| `unsupported_auth_type` | The command needs the other auth type: drafts need browser auth, the canvas sections, create and edit commands need an app token; Slack's `not_allowed_token_type` | Use a profile of the other type |
 | `unknown` | Anything else | Read `message` |
 
 ```bash

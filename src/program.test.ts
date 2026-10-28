@@ -26,16 +26,13 @@ const BROWSER_ONLY = new Set([
   'slackcli lists record',
 ]);
 
-// Commands that only work with a standard app token (#379, #431): Slack refuses
-// its scheduling and canvases APIs to browser session tokens. Their help must
-// say so.
+// Commands that only work with a standard app token (#431): Slack refuses its
+// canvases API to browser session tokens. Their help must say so. The scheduled
+// messages (#379) work with both token types since #474.
 const STANDARD_ONLY = new Set([
   'slackcli canvas sections',
   'slackcli canvas create',
   'slackcli canvas edit',
-  'slackcli messages schedule',
-  'slackcli messages list-scheduled',
-  'slackcli messages delete-scheduled',
 ]);
 
 // Every command that writes to Slack takes --dry-run (#328). A new write
