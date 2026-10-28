@@ -21,6 +21,22 @@ describe('lists command', () => {
     }
   });
 
+  it('exposes the three writes, each browser-only, confirming, with dry-run and --yes', () => {
+    for (const name of ['add-record', 'edit-cell', 'delete-record']) {
+      const command = subcommand(name);
+
+      expect(command).toBeDefined();
+      expect(longOptions(name)).toEqual(expect.arrayContaining(['--workspace', '--json', '--dry-run', '--yes']));
+      expect(helpOf(command!)).toMatchObject({ browserOnly: true, confirms: true, dryRun: true });
+    }
+  });
+
+  it('edit-cell takes the list, record, and column, with --type and --value', () => {
+    expect(subcommand('edit-cell')?.registeredArguments.map((arg) => arg.name()))
+      .toEqual(['list', 'record-id', 'column-id']);
+    expect(longOptions('edit-cell')).toEqual(expect.arrayContaining(['--type', '--value']));
+  });
+
   it('takes the list, and on record also the record ID', () => {
     expect(subcommand('read')?.registeredArguments.map((arg) => arg.name())).toEqual(['list']);
     expect(subcommand('record')?.registeredArguments.map((arg) => arg.name())).toEqual(['list', 'record-id']);

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'bun:test';
-import { columnNamesOf, fetchListRecords, LISTS_MAX_PAGES, listIdOf } from './lists.ts';
+import { columnNamesOf, fetchListRecords, LISTS_MAX_PAGES, listCellUpdateOf, listIdOf } from './lists.ts';
 import { formatListRecords } from './formatter.ts';
 import { applyFields, fieldsOption } from './json-fields.ts';
+import { InvalidInputError } from './cli-errors.ts';
 import type { SlackClient } from './slack-client.ts';
 import type { SlackListRecord, SlackListRecordsResponse } from '../types/index.ts';
 
@@ -132,5 +133,50 @@ describe('list JSON and --fields', () => {
 
     expect(applyFields('lists record', payload, fieldsOption({ fields: 'id,date_created', json: true })))
       .toEqual({ id: 'Rec1', date_created: 1700000000 });
+  });
+});
+
+describe('listCellUpdateOf', () => {
+  const row = 'Rec0123456789';
+  const column = 'Col0123456789';
+
+  it('builds a text cell as one rich_text section', () => {
+    expect(listCellUpdateOf(row, column, 'text', 'hello')).toEqual({
+      row_id: row,
+      column_id: column,
+      rich_text: [{ type: 'rich_text', elements: [{ type: 'rich_text_section', elements: [{ type: 'text', text: 'hello' }] }] }],
+    });
+  });
+
+  it('builds a checkbox cell as a boolean', () => {
+    expect(listCellUpdateOf(row, column, 'checkbox', 'true')).toEqual({ row_id: row, column_id: column, checkbox: true });
+    expect(listCellUpdateOf(row, column, 'checkbox', 'false')).toEqual({ row_id: row, column_id: column, checkbox: false });
+  });
+
+  it('builds a people cell from a comma list of user IDs under the user key', () => {
+    expect(listCellUpdateOf(row, column, 'people', 'U0123456789, W0123456789')).toEqual({
+      row_id: row,
+      column_id: column,
+      user: ['U0123456789', 'W0123456789'],
+    });
+  });
+
+  it('builds a date cell as a one-item list of YYYY-MM-DD', () => {
+    expect(listCellUpdateOf(row, column, 'date', '2026-10-28')).toEqual({ row_id: row, column_id: column, date: ['2026-10-28'] });
+  });
+
+  it('builds a number cell as a one-item list holding a number, not a string', () => {
+    expect(listCellUpdateOf(row, column, 'number', '7')).toEqual({ row_id: row, column_id: column, number: [7] });
+  });
+
+  it('refuses a value that does not fit its type, and an unknown type', () => {
+    expect(() => listCellUpdateOf(row, column, 'checkbox', 'yes')).toThrow(InvalidInputError);
+    expect(() => listCellUpdateOf(row, column, 'people', '')).toThrow(InvalidInputError);
+    expect(() => listCellUpdateOf(row, column, 'people', 'alice')).toThrow(InvalidInputError);
+    expect(() => listCellUpdateOf(row, column, 'date', '2026-02-31')).toThrow(InvalidInputError);
+    expect(() => listCellUpdateOf(row, column, 'date', '28/10/2026')).toThrow(InvalidInputError);
+    expect(() => listCellUpdateOf(row, column, 'number', '')).toThrow(InvalidInputError);
+    expect(() => listCellUpdateOf(row, column, 'number', 'seven')).toThrow(InvalidInputError);
+    expect(() => listCellUpdateOf(row, column, 'select', 'x')).toThrow(InvalidInputError);
   });
 });
