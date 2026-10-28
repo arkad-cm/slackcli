@@ -8,7 +8,6 @@ import {
   checkUploadFile,
   DRAFT_CREATE_AUTH_MESSAGE,
   SAVED_WRITE_AUTH_MESSAGE,
-  SCHEDULED_MESSAGES_AUTH_MESSAGE,
   SlackClient,
   SlackTransportError,
   toScheduledMessageSummary,
@@ -2334,20 +2333,90 @@ describe('SlackClient scheduled messages (#379)', () => {
     expect(isReadMethod('chat.deleteScheduledMessage')).toBe(false);
   });
 
-  it('refuses all three on browser session tokens before making a request', async () => {
-    const browser = new TestSlackClient();
+  // Browser session tokens schedule through Slack's drafts.* methods; the
+  // scheduled message's ID is then the draft's ID (#474).
+  describe('on browser session tokens (#474)', () => {
+    function browserClient(answers: unknown[]): { client: SlackClient; calls: Call[] } {
+      const client = new SlackClient({
+        workspace_id: 'T123',
+        workspace_name: 'Test Workspace',
+        workspace_url: 'https://example.slack.com',
+        auth_type: 'browser',
+        xoxd_token: 'xoxd-test',
+        xoxc_token: 'xoxc-test',
+      });
+      const calls: Call[] = [];
+      let next = 0;
+      spyOn(client, 'request').mockImplementation(async (method: string, params: Record<string, unknown> = {}) => {
+        calls.push({ method, params });
+        const answer = answers[Math.min(next, answers.length - 1)];
+        next += 1;
+        return answer;
+      });
+      return { client, calls };
+    }
 
-    expect(() => browser.requireStandardAuth(SCHEDULED_MESSAGES_AUTH_MESSAGE)).toThrow(UnsupportedAuthTypeError);
-    await expect(browser.scheduleMessage('C123', 'hi', 1791791400)).rejects.toThrow(UnsupportedAuthTypeError);
-    await expect(browser.listScheduledMessages()).rejects.toThrow(SCHEDULED_MESSAGES_AUTH_MESSAGE);
-    await expect(browser.deleteScheduledMessage('C123', 'Q1')).rejects.toThrow(SCHEDULED_MESSAGES_AUTH_MESSAGE);
-    expect(browser.calls).toEqual([]);
-    // The refusal names the token type that does work.
-    expect(SCHEDULED_MESSAGES_AUTH_MESSAGE).toContain('standard Slack app token (xoxb or xoxp)');
-  });
+    // drafts.create refuses date_scheduled with scheduled_draft_cannot_be_attached,
+    // so the time goes on with drafts.update, as in the Slack web client.
+    it('creates a plain draft, sets its time with drafts.update, and returns the draft ID', async () => {
+      const { client, calls } = browserClient([{ ok: true, draft: { id: 'Dr1' } }, { ok: true }]);
 
-  it('lets a standard token through the guard', () => {
-    expect(() => standardClient().client.requireStandardAuth(SCHEDULED_MESSAGES_AUTH_MESSAGE)).not.toThrow();
+      const response = await client.scheduleMessage('C123', 'Standup', 1791791400, { thread_ts: '1712345678.000100' });
+
+      expect(response).toEqual({ scheduled_message_id: 'Dr1', post_at: 1791791400 });
+      expect(calls.map((call) => call.method)).toEqual(['drafts.create', 'drafts.update']);
+      expect(calls[0]?.params).toMatchObject({ file_ids: '[]', is_from_composer: 'false' });
+      expect(calls[0]?.params).not.toHaveProperty('date_scheduled');
+      expect(calls[1]?.params).toMatchObject({ draft_id: 'Dr1', date_scheduled: 1791791400 });
+      for (const call of calls) {
+        expect(JSON.parse(String(call.params.destinations))).toEqual([
+          { channel_id: 'C123', thread_ts: '1712345678.000100', broadcast: false },
+        ]);
+      }
+    });
+
+    it('sends the schedule, draft, channel and content to drafts.update', async () => {
+      const { client, calls } = browserClient([{ ok: true }]);
+      const before = Date.now() / 1000;
+
+      await client.updateDraft('Dr2', 'C123', { blocks: [{ type: 'divider' }], date_scheduled: 1791791400 });
+
+      const after = Date.now() / 1000;
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.method).toBe('drafts.update');
+      expect(calls[0]?.params).toMatchObject({
+        draft_id: 'Dr2',
+        blocks: '[{"type":"divider"}]',
+        destinations: '[{"channel_id":"C123"}]',
+        date_scheduled: 1791791400,
+        file_ids: '[]',
+        is_from_composer: 'true',
+      });
+      const timestamp = Number(calls[0]?.params.client_last_updated_ts);
+      expect(timestamp).toBeGreaterThanOrEqual(before);
+      expect(timestamp).toBeLessThanOrEqual(after);
+    });
+
+    it('lists the scheduled drafts with drafts.list, in the same shape as on app tokens', async () => {
+      const soon = Math.floor(Date.now() / 1000) + 3600;
+      const { client, calls } = browserClient([{
+        ok: true,
+        drafts: [{ id: 'Dr1', date_created: 1791000000, date_scheduled: soon, destinations: [{ channel_id: 'C123' }], blocks: [] }],
+      }]);
+
+      const found = await client.listScheduledMessages({ limit: 5 });
+
+      expect(calls).toEqual([{ method: 'drafts.list', params: { is_active: true, limit: 1000 } }]);
+      expect(found).toEqual([{ scheduled_message_id: 'Dr1', channel_id: 'C123', post_at: soon, date_created: 1791000000, text: '' }]);
+    });
+
+    it('cancels by draft ID with drafts.delete', async () => {
+      const { client, calls } = browserClient([{ ok: true }]);
+
+      await client.deleteScheduledMessage('C123', 'Dr1');
+
+      expect(calls).toEqual([{ method: 'drafts.delete', params: { draft_id: 'Dr1', client_last_updated_ts: expect.any(String) } }]);
+    });
   });
 });
 

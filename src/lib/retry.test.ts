@@ -59,6 +59,7 @@ describe('isReadMethod', () => {
       'chat.deleteScheduledMessage',
       'drafts.create',
       'drafts.delete',
+      'drafts.update',
       'reactions.add',
       'conversations.open',
       'conversations.join',
