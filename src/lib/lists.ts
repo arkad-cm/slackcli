@@ -3,19 +3,25 @@ import type { ListCellUpdate, SlackListColumn, SlackListRecord } from '../types/
 import { normalizeIdentifier } from './slack-url-parser.ts';
 import { InvalidInputError } from './cli-errors.ts';
 
-// The cell types `lists edit-cell --type` accepts. Each one maps to the typed
-// key Slack's web client sends for that column type.
-export const LIST_CELL_TYPES = ['text', 'checkbox', 'people', 'date', 'number'] as const;
-export type ListCellType = (typeof LIST_CELL_TYPES)[number];
+/**
+ * The schema type of one column, from the list metadata that lists.records.info
+ * returns. A column ID the schema does not list throws.
+ */
+export function columnTypeOf(schema: SlackListColumn[] | undefined, columnId: string): string {
+  const schemaColumn = (schema ?? []).find((candidate) => candidate.id === columnId);
+  if (!schemaColumn?.type) throw new InvalidInputError(`Column ${columnId} is not in the list schema.`);
+  return schemaColumn.type;
+}
 
 /**
- * One cell of a lists.cells.update call, built from the user's raw value. Each
- * type checks its value first, so a bad value fails before any request.
- * `people` takes comma-separated user IDs; `date` takes YYYY-MM-DD.
+ * One cell of a lists.cells.update call, built from the user's raw value and the
+ * column's schema type. Each type checks its value first, so a bad value fails
+ * before any request. The column types that can be set are text, checkbox, user,
+ * date and number; `user` takes comma-separated user IDs, and `date` takes YYYY-MM-DD.
  */
-export function listCellUpdateOf(rowId: string, columnId: string, type: string, value: string): ListCellUpdate {
+export function listCellUpdateOf(rowId: string, columnId: string, columnType: string, value: string): ListCellUpdate {
   const cell = { row_id: rowId, column_id: columnId };
-  switch (type) {
+  switch (columnType) {
     case 'text':
       return {
         ...cell,
@@ -26,10 +32,10 @@ export function listCellUpdateOf(rowId: string, columnId: string, type: string, 
         throw new InvalidInputError('A checkbox cell takes "true" or "false".');
       }
       return { ...cell, checkbox: value === 'true' };
-    case 'people': {
+    case 'user': {
       const users = value.split(',').map((id) => id.trim()).filter(Boolean);
       if (users.length === 0 || users.some((id) => !/^[UW][A-Z0-9]+$/.test(id))) {
-        throw new InvalidInputError('A people cell takes one or more user IDs (U... or W...), separated by commas.');
+        throw new InvalidInputError('A user cell takes one or more user IDs (U... or W...), separated by commas.');
       }
       return { ...cell, user: users };
     }
@@ -46,8 +52,26 @@ export function listCellUpdateOf(rowId: string, columnId: string, type: string, 
       return { ...cell, number: [number] };
     }
     default:
-      throw new InvalidInputError(`Unknown cell type "${type}". Use one of: ${LIST_CELL_TYPES.join(', ')}.`);
+      throw new InvalidInputError(
+        `Column type "${columnType}" cannot be set with lists edit-cell. Settable types: text, checkbox, user, date, number.`,
+      );
   }
+}
+
+/**
+ * The cell for one edit-cell call. It reads the record with lists.records.info, so
+ * the list schema gives the column's type, and the cell takes its shape from that type.
+ */
+export async function listCellWriteOf(
+  client: Pick<SlackClient, 'getListRecord'>,
+  listId: string,
+  recordId: string,
+  columnId: string,
+  value: string,
+): Promise<{ type: string; cell: ListCellUpdate }> {
+  const response = await client.getListRecord(listId, recordId);
+  const type = columnTypeOf(response.list?.list_metadata?.schema, columnId);
+  return { type, cell: listCellUpdateOf(recordId, columnId, type, value) };
 }
 
 // A bound on the pages followed, so a cursor that never ends cannot loop forever.

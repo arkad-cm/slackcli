@@ -52,23 +52,23 @@ The new row has no cells. Set them with `edit-cell`. The row ID prints when Slac
 
 ```bash
 slackcli lists edit-cell F0123456789 Rec0123456789 Col0123456789 --value "Ship the release"
-slackcli lists edit-cell F0123456789 Rec0123456789 Col0123456789 --type checkbox --value true --yes
-slackcli lists edit-cell F0123456789 Rec0123456789 Col0123456789 --type people --value U0123456789,U0987654321 --yes
-slackcli lists edit-cell F0123456789 Rec0123456789 Col0123456789 --type date --value 2026-10-28 --yes
-slackcli lists edit-cell F0123456789 Rec0123456789 Col0123456789 --type number --value 7 --yes
+slackcli lists edit-cell F0123456789 Rec0123456789 Col0123456789 --value true --yes
+slackcli lists edit-cell F0123456789 Rec0123456789 Col0123456789 --value U0123456789,U0987654321 --yes
+slackcli lists edit-cell F0123456789 Rec0123456789 Col0123456789 --value 2026-10-28 --yes
+slackcli lists edit-cell F0123456789 Rec0123456789 Col0123456789 --value 7 --yes
 ```
 
-`--type` says how to read `--value`. It defaults to `text`. The five types are:
+There is no `--type` flag. The CLI reads the column's type from the list schema, with one `lists.records.info` call on the record, and shapes the cell from it. `--value` is read as that type says:
 
-| `--type` | `--value` |
+| Column type | `--value` |
 |---|---|
 | `text` | Any string, stored as one rich-text section |
 | `checkbox` | `true` or `false` |
-| `people` | One or more user IDs (`U...` or `W...`), separated by commas |
+| `user` | One or more user IDs (`U...` or `W...`), separated by commas |
 | `date` | A real date as `YYYY-MM-DD` |
 | `number` | A finite number |
 
-A value that does not fit its type fails before any request is sent. Get the column ID from `lists read` (the cell's `column_id`) or from `lists record`.
+A column type other than these five is refused, and so is a column ID the schema does not list. Both fail before the write, and `--dry-run` shows the resolved type in its payload. Get the column ID from `lists read` (the cell's `column_id`) or from `lists record`.
 
 ## Delete a row
 

@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import ora from 'ora';
 import { getAuthenticatedClient } from '../lib/auth.ts';
-import { columnNamesOf, fetchListRecords, LIST_CELL_TYPES, listCellUpdateOf, listIdOf } from '../lib/lists.ts';
+import { columnNamesOf, fetchListRecords, listCellWriteOf, listIdOf } from '../lib/lists.ts';
 import { formatListRecords, success, warning, writeJson, writeText } from '../lib/formatter.ts';
 import { applyFields, fieldsOption, FIELDS_DESCRIPTION, FIELDS_FLAG } from '../lib/json-fields.ts';
 import { workspaceMismatchWarning, workspaceOf } from '../lib/slack-url-parser.ts';
@@ -74,16 +74,16 @@ const HELP = {
   editCell: {
     summary: 'Set one cell of a list row',
     description:
-      'Set one cell of a row in a Slack list. --type says how to read --value: ' +
-      `${LIST_CELL_TYPES.join(', ')}. ` +
-      'text takes any string. checkbox takes true or false. people takes comma-separated user IDs (U... or W...). ' +
-      'date takes YYYY-MM-DD. number takes a number. Get the row ID from "lists read" and the column ID from the list.',
+      'Set one cell of a row in a Slack list. The column type comes from the list schema that Slack sends with the row, ' +
+      'so you give only the value. text takes any string. checkbox takes true or false. user takes comma-separated user IDs ' +
+      '(U... or W...). date takes YYYY-MM-DD. number takes a number. Other column types, such as created_by and select, ' +
+      'are refused. Get the row ID from "lists read" and the column ID from the list.',
     examples: [
       'slackcli lists edit-cell F0123456789 Rec0123456789 Col0123456789 --value "Ship the release"',
-      'slackcli lists edit-cell F0123456789 Rec0123456789 Col0123456789 --type checkbox --value true --yes',
-      'slackcli lists edit-cell F0123456789 Rec0123456789 Col0123456789 --type people --value U0123456789,U0987654321 --yes --json',
+      'slackcli lists edit-cell F0123456789 Rec0123456789 Col0123456789 --value true --yes',
+      'slackcli lists edit-cell F0123456789 Rec0123456789 Col0123456789 --value U0123456789,U0987654321 --yes --json',
     ],
-    json: '{ list_id, row_id, column_id, type }, the cell that was set.',
+    json: '{ list_id, row_id, column_id, type }, the cell that was set and its column type from the schema.',
     browserOnly: true,
     confirms: true,
     dryRun: true,
@@ -216,8 +216,7 @@ export function createListsCommand(): Command {
     .argument('<list>', 'List file ID or Slack list URL')
     .argument('<record-id>', 'Row ID from lists read')
     .argument('<column-id>', 'Column ID from lists read or lists record')
-    .requiredOption('--value <value>', 'The new value, read as --type says')
-    .option('--type <type>', `Cell type: ${LIST_CELL_TYPES.join(', ')}`, 'text')
+    .requiredOption('--value <value>', 'The new value, read as the column type says')
     .option('--workspace <id|name>', 'Workspace to use')
     .option('--yes', 'Skip the confirmation prompt (required when stdin is not a TTY)', false)
     .option('--json', 'Output in JSON format', false)
@@ -226,16 +225,16 @@ export function createListsCommand(): Command {
       const spinner = ora('Setting list cell...').start();
       try {
         const listId = listIdOf(listArg);
-        // Built before the client, so a bad --value or --type fails with no request.
-        const cell = listCellUpdateOf(recordId, columnId, options.type, options.value);
         const client = await getAuthenticatedClient(options.workspace);
         client.requireBrowserAuth(LIST_WRITE_AUTH_MESSAGE);
         warnOnWorkspaceMismatch(client, workspaceOf(listArg));
+        // Reads the schema before any preview or write, so the type shown is the one used.
+        const { type, cell } = await listCellWriteOf(client, listId, recordId, columnId, options.value);
         spinner.stop();
 
         if (options.dryRun) {
           emitDryRun(
-            await buildPreview(client, 'edit list cell', { kind: 'list', id: listId }, { cells: [cell] }),
+            await buildPreview(client, 'edit list cell', { kind: 'list', id: listId }, { type, cells: [cell] }),
             options.json,
           );
           return;
@@ -250,7 +249,7 @@ export function createListsCommand(): Command {
         spinner.succeed('Set list cell');
 
         if (options.json) {
-          writeJson({ list_id: listId, row_id: recordId, column_id: columnId, type: options.type });
+          writeJson({ list_id: listId, row_id: recordId, column_id: columnId, type });
           return;                          // never process.exit() after writeJson
         }
         success(`Set column ${columnId} of row ${recordId}`);

@@ -31,10 +31,11 @@ describe('lists command', () => {
     }
   });
 
-  it('edit-cell takes the list, record, and column, with --type and --value', () => {
+  it('edit-cell takes the list, record, and column, with --value and no --type (the type comes from the schema)', () => {
     expect(subcommand('edit-cell')?.registeredArguments.map((arg) => arg.name()))
       .toEqual(['list', 'record-id', 'column-id']);
-    expect(longOptions('edit-cell')).toEqual(expect.arrayContaining(['--type', '--value']));
+    expect(longOptions('edit-cell')).toEqual(expect.arrayContaining(['--value']));
+    expect(longOptions('edit-cell')).not.toContain('--type');
   });
 
   it('takes the list, and on record also the record ID', () => {

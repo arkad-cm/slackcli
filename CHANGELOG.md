@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **`lists read` and `lists record`**: read-only access to Slack lists, with a browser login. `lists read <list>` returns every record of a list, across all pages. `lists record <list> <record-id>` returns one record, with column names when Slack sends the schema. `<list>` takes a list file ID or a Slack list URL. Both take `--json` and `--fields` (#469)
-- **`lists add-record`, `lists edit-cell` and `lists delete-record`**: change a Slack list from the terminal, with a browser login. `add-record <list>` adds an empty row. `edit-cell <list> <record-id> <column-id> --value <value>` sets one cell, with `--type` as `text` (default), `checkbox`, `people`, `date` or `number`. `delete-record <list> <record-id>` deletes a row. Each asks for confirmation, takes `--yes` and `--dry-run`, and `--json` prints the result (#469)
+- **`lists add-record`, `lists edit-cell` and `lists delete-record`**: change a Slack list from the terminal, with a browser login. `add-record <list>` adds an empty row. `edit-cell <list> <record-id> <column-id> --value <value>` sets one cell. The column type comes from the list schema, so there is no `--type`: `text`, `checkbox`, `user`, `date` and `number` columns take a value, and other types are refused. `delete-record <list> <record-id>` deletes a row. Each asks for confirmation, takes `--yes` and `--dry-run`, and `--json` prints the result (#469)
 
 ## [0.18.0] - 2026-10-28
 

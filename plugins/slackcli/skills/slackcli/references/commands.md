@@ -170,7 +170,7 @@ logs path [--json]   |   logs show [--last=N | --run=ID] [--json]   |   logs cle
 lists read <F…|url> [--json] [--fields=…]              # browser auth only; every record, raw column IDs
 lists record <F…|url> <Rec…> [--json] [--fields=…]     # browser auth only; one record, column names resolved
 lists add-record <F…|url> [--yes] [--dry-run] [--json]                              # browser auth only; adds an empty row
-lists edit-cell <F…|url> <Rec…> <Col…> --value=… [--type=text|checkbox|people|date|number] [--yes] [--dry-run] [--json]   # browser auth only
+lists edit-cell <F…|url> <Rec…> <Col…> --value=… [--yes] [--dry-run] [--json]   # browser auth only; the column type comes from the schema
 lists delete-record <F…|url> <Rec…> [--yes] [--dry-run] [--json]                    # browser auth only; deletes one row
 ```
 
