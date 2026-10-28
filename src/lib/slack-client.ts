@@ -946,6 +946,21 @@ export class SlackClient {
     return this.request('search.messages', params);
   }
 
+  // Search files (same paging and sort params as searchMessages)
+  async searchFiles(query: string, options: {
+    count?: number;
+    page?: number;
+    sort?: string;
+    sort_dir?: string;
+  } = {}): Promise<any> {
+    const params: Record<string, any> = { query };
+    if (options.count) params.count = options.count;
+    if (options.page) params.page = options.page;
+    if (options.sort) params.sort = options.sort;
+    if (options.sort_dir) params.sort_dir = options.sort_dir;
+    return this.request('search.files', params);
+  }
+
   // Search by module (browser: search.modules, standard: falls back to search.all)
   async searchModules(query: string, module: 'channels' | 'people', options: {
     count?: number;
