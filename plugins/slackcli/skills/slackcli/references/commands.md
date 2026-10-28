@@ -25,7 +25,7 @@ Condensed from https://github.com/shaharia-lab/slackcli/tree/main/docs/user-guid
   `saved add|update|complete|reopen|remove`, `conversations read|get|mark-read`. A reply link targets the parent thread
   (`get` and `mark-read` use the linked message's own timestamp).
 - `--dry-run` on every Slack write (`messages send|edit|delete|react|unreact|draft|send-draft|delete-draft|schedule|delete-scheduled`,
-  `conversations members add|remove`, `join`, `leave`, `mark-read`, `canvas create|edit`,
+  `conversations create`, `members add|remove`, `join`, `leave`, `mark-read`, `canvas create|edit`,
   `saved add|update|complete|reopen|remove`, every `usergroups` write):
   resolves and validates, writes nothing, never prompts or needs `--yes`, exits 0.
   With `--json`: `{dry_run: true, action, workspace: {name,id,profile}, target: {kind,id?,name?,ts?,thread_ts?}, payload}`.
@@ -57,6 +57,7 @@ conversations read --permalink=URL [--json]        # that message's thread
 conversations get <channel> <ts> | --permalink=URL [--json]
 conversations unread [--types=channels|dms|groups] [--messages [--max-conversations=10] [--limit=20]] [--json]
 conversations mark-read <channel|#name|url> --ts=TS | --permalink=URL [--yes] [--dry-run] [--json]
+conversations create <name> [--private] [--dry-run] [--json]   # → {channel_id,name,is_private}
 ```
 
 JSON: `list` → `conversations[]`, `users[]`, `next_cursor` (null on last page).
