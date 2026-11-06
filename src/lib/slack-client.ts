@@ -331,6 +331,15 @@ function savedItemParams(channel: string, ts: string): Record<string, string> {
   return { item_type: 'message', item_id: channel, ts };
 }
 
+// The reminder row a saved.* write acts on. The id is required for the same
+// reason as above.
+function savedReminderParams(itemId: string): Record<string, string> {
+  if (!itemId) {
+    throw new InvalidInputError('A Later-list write on a reminder needs its item id.');
+  }
+  return { item_type: 'reminder', item_id: itemId };
+}
+
 // chat.scheduledMessages.list page size, and a bound on the pages followed so a
 // cursor that never ends cannot loop forever.
 const SCHEDULED_PAGE_SIZE = 100;
@@ -888,12 +897,14 @@ export class SlackClient {
   async listSavedItems(options: {
     count?: number;
     cursor?: string;
+    filter?: string;
   } = {}): Promise<any> {
     const params: Record<string, any> = {};
     if (options.count) params.count = options.count;
     if (options.cursor) params.cursor = options.cursor;
 
     if (this.config.auth_type === 'browser') {
+      if (options.filter) params.filter = options.filter;
       return this.request('saved.list', params);
     }
     return this.request('stars.list', params);
@@ -920,6 +931,26 @@ export class SlackClient {
   async deleteSavedItem(channel: string, ts: string): Promise<any> {
     this.requireBrowserAuth(SAVED_WRITE_AUTH_MESSAGE);
     return this.request('saved.delete', savedItemParams(channel, ts));
+  }
+
+  // Add a free-text reminder for yourself; it lands on the Later list as a
+  // to-do. Browser auth only, as its row can only be changed through saved.*.
+  async addReminder(text: string, time: number): Promise<any> {
+    this.requireBrowserAuth(SAVED_WRITE_AUTH_MESSAGE);
+    return this.request('reminders.add', { text, time });
+  }
+
+  // Change one reminder row on the Later list, named by its Sa... id; these
+  // rows have no message timestamp. Browser auth only.
+  async updateSavedReminder(itemId: string, update: SavedItemUpdate | { description: string }): Promise<any> {
+    this.requireBrowserAuth(SAVED_WRITE_AUTH_MESSAGE);
+    return this.request('saved.update', { ...savedReminderParams(itemId), ...update });
+  }
+
+  // Remove one reminder row from the Later list. Browser auth only.
+  async deleteSavedReminder(itemId: string): Promise<any> {
+    this.requireBrowserAuth(SAVED_WRITE_AUTH_MESSAGE);
+    return this.request('saved.delete', savedReminderParams(itemId));
   }
 
   // Batch-fetch messages by channel + timestamp (browser auth only).

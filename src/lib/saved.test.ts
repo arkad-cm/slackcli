@@ -535,3 +535,34 @@ describe('Later-list write actions', () => {
     await expect(removeSavedItem(failing, 'C123', TS)).rejects.toThrow('x');
   });
 });
+
+describe('enrichSavedItems: reminder rows', () => {
+  const reminder = {
+    item_type: 'reminder', item_id: 'Sa0ABC', date_created: 1700000000, date_due: 1700000100,
+    state: 'in_progress', todo_state: 'to_do',
+    description: [{ type: 'rich_text', elements: [{ type: 'rich_text_section', elements: [
+      { type: 'text', text: 'Call ' }, { type: 'user', user_id: 'U1' }, { type: 'text', text: ' back ' },
+      { type: 'emoji', name: 'wave' }, { type: 'link', url: 'https://a.example' },
+    ] }] }],
+  };
+
+  it('keeps the id, text, due date and state', async () => {
+    const client = createMockClient({ listSavedItems: () => Promise.resolve({ saved_items: [reminder] }) });
+
+    const { items } = await enrichSavedItems(client);
+
+    expect(items).toEqual([{
+      type: 'reminder', channel_id: 'Sa0ABC', item_id: 'Sa0ABC', date_saved: 1700000000, date_due: 1700000100,
+      state: 'in_progress', todo_state: 'to_do', text: 'Call <@U1> back :wave:https://a.example',
+    }]);
+  });
+
+  it('asks Slack for completed items when filtered to them', async () => {
+    const seen: any[] = [];
+    const client = createMockClient({ listSavedItems: (opts) => { seen.push(opts); return Promise.resolve({ saved_items: [] }); } });
+
+    await enrichSavedItems(client, { filter: 'completed' });
+
+    expect(seen[0].filter).toBe('completed');
+  });
+});

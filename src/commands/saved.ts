@@ -5,16 +5,23 @@ import {
   error, formatSavedItems, formatScheduleTime, success, warning, writeJson, writeText,
 } from '../lib/formatter.ts';
 import { applyFields, fieldsOption, FIELDS_DESCRIPTION, FIELDS_FLAG } from '../lib/json-fields.ts';
+import { InvalidInputError } from '../lib/cli-errors.ts';
 import {
   addDueDate,
   addSavedItem,
+  addSavedReminder,
+  assertReminderId,
   COMPLETE_UPDATE,
   enrichSavedItems,
+  reminderTextUpdate,
   removeSavedItem,
+  removeSavedReminder,
   reopenUpdate,
   savedUpdateFromOptions,
+  type SavedReminderResult,
   type SavedWriteResult,
   updateSavedItem,
+  updateSavedReminder,
 } from '../lib/saved.ts';
 import { CHANNEL_NAME_NOTE, describeCommand, type CommandHelp } from '../lib/help.ts';
 import { failCommand } from '../lib/command-errors.ts';
@@ -62,7 +69,8 @@ const HELP = {
       '{ item_count, items }. With no items nothing is written to stdout (exit 0).',
     notes: [
       'Browser auth reads saved.list (the Later list): items are { type, channel_id, channel_name, message, date_saved, todo_state }, ' +
-        'with message text resolved; non-message items carry only type, channel_id and date_saved.',
+        'with message text resolved; other rows, such as reminders, are { type, item_id, channel_id, text, date_due, state, todo_state, date_saved }, ' +
+        'each present when Slack sends it. Pass a reminder\'s item_id to --item-id on the write commands.',
       'App tokens (xoxb/xoxp) read stars.list (starred items) and return Slack\'s items as-is: ' +
         'no todo_state, so --state matches nothing.',
       '--limit caps the items fetched, before --state filters them.',
@@ -202,6 +210,50 @@ async function resolveSavedTarget(
   return { client, channelId, timestamp: target.timestamp };
 }
 
+// A reminder row is named by --item-id alone: refuse a message target next to
+// it and an app token, before anything else runs.
+async function resolveReminderClient(
+  options: { itemId: string; permalink?: string; channelId?: string; timestamp?: string; workspace?: string },
+): Promise<SlackClient> {
+  if (options.permalink || options.channelId || options.timestamp) {
+    throw new InvalidInputError('--item-id replaces --channel-id, --timestamp and --permalink; pass one or the other.');
+  }
+  assertReminderId(options.itemId);
+  const client = await getAuthenticatedClient(options.workspace);
+  client.requireBrowserAuth(SAVED_WRITE_AUTH_MESSAGE);
+  return client;
+}
+
+function reportReminderWrite(result: SavedReminderResult, json: boolean): void {
+  if (json) {
+    writeJson(result);
+    return;
+  }
+  const due = result.date_due > 0 ? `due ${formatScheduleTime(result.date_due)}` : 'no due date';
+  success(`Reminder ${result.item_id}: ${result.todo_state ?? 'unknown state'}, ${due}`);
+}
+
+// The one flow of update, complete and reopen on a reminder row.
+async function runReminderUpdate(
+  options: { itemId: string; dryRun?: boolean; json: boolean; workspace?: string },
+  spinner: ReturnType<typeof ora>,
+  action: string,
+  done: string,
+  makeUpdate: () => Parameters<typeof updateSavedReminder>[2],
+): Promise<void> {
+  const update = makeUpdate();
+  const client = await resolveReminderClient(options);
+  spinner.stop();
+  if (options.dryRun) {
+    emitDryRun(await buildPreview(client, action, { kind: 'reminder', id: options.itemId }, update), options.json);
+    return;
+  }
+  spinner.start(`${done}...`);
+  const result = await updateSavedReminder(client, options.itemId, update);
+  spinner.succeed(done);
+  reportReminderWrite(result, options.json);
+}
+
 function reportSavedWrite(result: SavedWriteResult, json: boolean): void {
   if (json) {
     writeJson(result);
@@ -229,6 +281,7 @@ export function createSavedCommand(): Command {
 
         let { items, users } = await enrichSavedItems(client, {
           limit: options.limit ? Number.parseInt(options.limit) : undefined,
+          filter: options.state === 'completed' ? 'completed' : undefined,
           onProgress: (msg) => { spinner.text = msg; },
         });
 
@@ -259,6 +312,7 @@ export function createSavedCommand(): Command {
     .option('--channel-id <id>', 'Channel ID, URL or name where the message is')
     .option('--timestamp <ts>', 'Message timestamp (1234567890.123456 or p1234567890123456)')
     .option('--permalink <url>', 'Slack message link (replaces --channel-id and --timestamp)')
+    .option('--text <text>', 'Add a free-text to-do instead of a message; needs --due')
     .option('--due <time>', 'Due date and time (default: now)')
     .option('--workspace <id|name>', 'Workspace to use')
     .option('--json', 'Output the saved item as JSON', false)
@@ -267,6 +321,34 @@ export function createSavedCommand(): Command {
       const spinner = ora('Adding to your Later list...').start();
 
       try {
+        if (options.text !== undefined) {
+          if (options.permalink || options.channelId || options.timestamp) {
+            throw new InvalidInputError('--text adds a to-do with no message; drop --channel-id, --timestamp and --permalink.');
+          }
+          if (options.text.trim() === '') {
+            throw new InvalidInputError('--text must not be empty.');
+          }
+          if (options.due === undefined) {
+            throw new InvalidInputError('--text needs --due: Slack refuses a reminder with no future time.');
+          }
+          const due = addDueDate(options.due);
+          const client = await getAuthenticatedClient(options.workspace);
+          client.requireBrowserAuth(SAVED_WRITE_AUTH_MESSAGE);
+          spinner.stop();
+          if (options.dryRun) {
+            emitDryRun(
+              await buildPreview(client, 'add reminder', { kind: 'reminder' }, { text: options.text, date_due: due }),
+              options.json,
+            );
+            return;
+          }
+          spinner.start('Adding to your Later list...');
+          const result = await addSavedReminder(client, options.text, due);
+          spinner.succeed('Added to your Later list');
+          reportReminderWrite(result, options.json);
+          return;
+        }
+
         const dateDue = addDueDate(options.due);
         const { client, channelId, timestamp } = await resolveSavedTarget(options, spinner);
         spinner.stop();
@@ -298,6 +380,8 @@ export function createSavedCommand(): Command {
     .option('--channel-id <id>', 'Channel ID, URL or name where the message is')
     .option('--timestamp <ts>', 'Message timestamp (1234567890.123456 or p1234567890123456)')
     .option('--permalink <url>', 'Slack message link (replaces --channel-id and --timestamp)')
+    .option('--item-id <id>', 'Later id of a reminder row, as saved list prints it (replaces the message flags)')
+    .option('--text <text>', 'New words for a reminder row; needs --item-id')
     .option('--state <state>', 'Move the item: saved or to_do')
     .option('--due <time>', 'New due date and time')
     .option('--no-due', 'Clear the due date')
@@ -308,6 +392,18 @@ export function createSavedCommand(): Command {
       const spinner = ora('Updating saved item...').start();
 
       try {
+        if (options.text !== undefined && !options.itemId) {
+          throw new InvalidInputError('--text needs --item-id: only a reminder row has words of its own to change.');
+        }
+        if (options.itemId) {
+          await runReminderUpdate(options, spinner, 'update reminder', 'Reminder updated', () => (
+            options.text !== undefined
+              ? reminderTextUpdate({ text: options.text, state: options.state, due: options.due })
+              : savedUpdateFromOptions({ state: options.state, due: options.due })
+          ));
+          return;
+        }
+
         const update = savedUpdateFromOptions({ state: options.state, due: options.due });
         const { client, channelId, timestamp } = await resolveSavedTarget(options, spinner);
         spinner.stop();
@@ -339,6 +435,7 @@ export function createSavedCommand(): Command {
     .option('--channel-id <id>', 'Channel ID, URL or name where the message is')
     .option('--timestamp <ts>', 'Message timestamp (1234567890.123456 or p1234567890123456)')
     .option('--permalink <url>', 'Slack message link (replaces --channel-id and --timestamp)')
+    .option('--item-id <id>', 'Later id of a reminder row, as saved list prints it (replaces the message flags)')
     .option('--workspace <id|name>', 'Workspace to use')
     .option('--json', 'Output the saved item as JSON', false)
     .option(DRY_RUN_FLAG, DRY_RUN_DESCRIPTION, false)
@@ -346,6 +443,11 @@ export function createSavedCommand(): Command {
       const spinner = ora('Completing saved item...').start();
 
       try {
+        if (options.itemId) {
+          await runReminderUpdate(options, spinner, 'complete reminder', 'Reminder completed', () => COMPLETE_UPDATE);
+          return;
+        }
+
         const { client, channelId, timestamp } = await resolveSavedTarget(options, spinner);
         spinner.stop();
 
@@ -376,6 +478,7 @@ export function createSavedCommand(): Command {
     .option('--channel-id <id>', 'Channel ID, URL or name where the message is')
     .option('--timestamp <ts>', 'Message timestamp (1234567890.123456 or p1234567890123456)')
     .option('--permalink <url>', 'Slack message link (replaces --channel-id and --timestamp)')
+    .option('--item-id <id>', 'Later id of a reminder row, as saved list prints it (replaces the message flags)')
     .option('--workspace <id|name>', 'Workspace to use')
     .option('--json', 'Output the saved item as JSON', false)
     .option(DRY_RUN_FLAG, DRY_RUN_DESCRIPTION, false)
@@ -383,6 +486,11 @@ export function createSavedCommand(): Command {
       const spinner = ora('Reopening saved item...').start();
 
       try {
+        if (options.itemId) {
+          await runReminderUpdate(options, spinner, 'reopen reminder', 'Reminder reopened', () => reopenUpdate());
+          return;
+        }
+
         const { client, channelId, timestamp } = await resolveSavedTarget(options, spinner);
         spinner.stop();
         const update = reopenUpdate();
@@ -414,6 +522,7 @@ export function createSavedCommand(): Command {
     .option('--channel-id <id>', 'Channel ID, URL or name where the message is')
     .option('--timestamp <ts>', 'Message timestamp (1234567890.123456 or p1234567890123456)')
     .option('--permalink <url>', 'Slack message link (replaces --channel-id and --timestamp)')
+    .option('--item-id <id>', 'Later id of a reminder row, as saved list prints it (replaces the message flags)')
     .option('--yes', 'Confirm removal without a prompt', false)
     .option('--workspace <id|name>', 'Workspace to use')
     .option('--json', 'Output the result as JSON', false)
@@ -422,6 +531,31 @@ export function createSavedCommand(): Command {
       const spinner = ora('Removing saved item...').start();
 
       try {
+        if (options.itemId) {
+          const client = await resolveReminderClient(options);
+          spinner.stop();
+          if (options.dryRun) {
+            emitDryRun(
+              await buildPreview(client, 'remove reminder', { kind: 'reminder', id: options.itemId }),
+              options.json,
+            );
+            return;
+          }
+          if (!(await confirmWrite(`Remove reminder ${options.itemId} from your Later list?`, options.yes, options.json))) {
+            if (!options.json) error('Saved item was not removed');
+            return;
+          }
+          spinner.start('Removing saved item...');
+          const result = await removeSavedReminder(client, options.itemId);
+          spinner.succeed('Removed from your Later list');
+          if (options.json) {
+            writeJson(result);
+          } else {
+            success(`Reminder: ${result.item_id}`);
+          }
+          return;
+        }
+
         const { client, channelId, timestamp } = await resolveSavedTarget(options, spinner);
         spinner.stop();
 

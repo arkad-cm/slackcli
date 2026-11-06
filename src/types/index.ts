@@ -335,6 +335,12 @@ export interface SavedItem {
   message?: SlackMessage;
   date_saved?: number;
   todo_state?: string;
+  // Rows that are not messages (browser auth). `item_id` is the id writes take
+  // through --item-id; `channel_id` holds the same value for older scripts.
+  item_id?: string;
+  text?: string;
+  date_due?: number;
+  state?: string;
   file?: {
     name?: string;
     title?: string;

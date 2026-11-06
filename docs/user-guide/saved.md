@@ -29,8 +29,10 @@ The two auth types read different Slack lists and return different shapes:
   entries are only pointers — a channel ID and a timestamp — so SlackCLI
   resolves each one into the message text, the channel name, and the author.
   Each `--json` item is `{type, channel_id, channel_name, message, date_saved,
-  todo_state}`; non-message items carry only `type`, `channel_id` and
-  `date_saved`.
+  todo_state}`. Other rows, such as reminders, are `{type, item_id, channel_id,
+  text, date_due, state, todo_state, date_saved}`, each field present when Slack
+  sends it. `--state=completed` asks Slack for completed items, which it leaves
+  out otherwise.
 - **Standard auth** (app tokens) falls back to `stars.list`, which returns
   *starred* items with the message inline. They are passed through as Slack
   returns them, so the `--json` item shape is Slack's `stars.list` shape. Those
@@ -127,6 +129,32 @@ slackcli saved reopen --channel-id=C1234567890 --timestamp=1234567890.123456 --j
 | `--workspace <id\|name>` | Workspace to use |
 | `--json` | JSON output: `{channel_id, ts, todo_state, date_due}` |
 | `--dry-run` | Show what would be done without doing it |
+
+## Reminder rows
+
+A to-do made from text, not from a message, is a reminder row. It has no message
+timestamp, so the write commands name it with `--item-id`, the `Sa...` id that
+`saved list` prints. **Browser authentication only.**
+
+```bash
+slackcli saved add --text "Call the vendor" --due "2026-10-12 09:50" --json
+slackcli saved update --item-id=Sa0ABC123 --text "Call the vendor again"
+slackcli saved update --item-id=Sa0ABC123 --due "2026-10-13 09:50"
+slackcli saved update --item-id=Sa0ABC123 --state saved
+slackcli saved complete --item-id=Sa0ABC123
+slackcli saved reopen --item-id=Sa0ABC123
+slackcli saved remove --item-id=Sa0ABC123 --yes
+```
+
+- `saved add --text` needs `--due`, as Slack refuses a reminder with no future
+  time. Its `--json` output is `{item_id, text, todo_state, date_due}`.
+- `saved update --text` changes the words only, so it takes no `--state`, `--due`
+  or `--no-due`.
+- `--no-due` also moves a reminder from To-dos to Saved: Slack keeps no to-do
+  without a due date here.
+- `--item-id` replaces `--channel-id`, `--timestamp` and `--permalink`.
+- A changed due date moves the reminder's notification. Completing or removing
+  the reminder before it is due stops the notification.
 
 ## `saved remove`
 

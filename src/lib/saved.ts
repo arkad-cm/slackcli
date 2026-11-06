@@ -20,7 +20,7 @@ type MappedItems = { items: SavedItem[]; userIds: Set<string> };
  */
 async function fetchAllSavedItems(
   client: SlackClient,
-  options: { limit?: number; onProgress?: ProgressCallback },
+  options: { limit?: number; filter?: string; onProgress?: ProgressCallback },
 ): Promise<{ rawItems: any[]; isBrowserFormat: boolean }> {
   const rawItems: any[] = [];
   let isBrowserFormat = false;
@@ -29,7 +29,7 @@ async function fetchAllSavedItems(
   do {
     const soFar = rawItems.length > 0 ? ` (${rawItems.length} so far)` : '';
     options.onProgress?.(`Fetching saved items${soFar}...`);
-    const response = await client.listSavedItems({ count: PAGE_SIZE, cursor });
+    const response = await client.listSavedItems({ count: PAGE_SIZE, cursor, filter: options.filter });
 
     isBrowserFormat = !!response.saved_items;
     const pageItems = isBrowserFormat ? response.saved_items : (response.items || []);
@@ -114,9 +114,46 @@ async function fetchMessagesAndChannels(
   return { messageLookup: buildMessageLookup(batchResponses), channelNames };
 }
 
+/** The plain text of one rich_text element and everything nested inside it. */
+function richTextElementText(element: any): string {
+  switch (element?.type) {
+    case 'text': return element.text ?? '';
+    case 'link': return element.text ?? element.url ?? '';
+    case 'user': return `<@${element.user_id}>`;
+    case 'channel': return `<#${element.channel_id}>`;
+    case 'emoji': return `:${element.name}:`;
+    default: return (element?.elements ?? []).map(richTextElementText).join('');
+  }
+}
+
+/** The plain text of a reminder row's `description` blocks. */
+export function descriptionText(description: unknown): string | undefined {
+  if (!Array.isArray(description)) return undefined;
+  return description.map(richTextElementText).join('\n');
+}
+
 /**
- * Browser auth (`saved.list`) — items carry only channel + ts, so the message
- * bodies and channel names have to be resolved separately.
+ * A row that is not a message: its fields come straight from saved.list, as no
+ * message lookup applies. Fields Slack leaves out stay absent.
+ */
+function mapNonMessageItem(item: any): SavedItem {
+  const mapped: SavedItem = {
+    type: item.item_type,
+    channel_id: item.item_id,
+    item_id: item.item_id,
+    date_saved: item.date_created,
+  };
+  const text = descriptionText(item.description);
+  if (text !== undefined) mapped.text = text;
+  if (item.date_due !== undefined) mapped.date_due = item.date_due;
+  if (item.state !== undefined) mapped.state = item.state;
+  if (item.todo_state !== undefined) mapped.todo_state = item.todo_state;
+  return mapped;
+}
+
+/**
+ * Browser auth (`saved.list`) — message items carry only channel + ts, so the
+ * message bodies and channel names have to be resolved separately.
  */
 async function enrichBrowserItems(
   client: SlackClient,
@@ -131,7 +168,7 @@ async function enrichBrowserItems(
   const otherItems = rawItems.filter((item: any) => item.item_type !== 'message');
 
   for (const item of otherItems) {
-    items.push({ type: item.item_type, channel_id: item.item_id, date_saved: item.date_created } as SavedItem);
+    items.push(mapNonMessageItem(item));
   }
 
   if (messageItems.length === 0) {
@@ -200,6 +237,8 @@ export async function enrichSavedItems(
   client: SlackClient,
   options: {
     limit?: number;
+    // saved.list `filter`: without it Slack leaves completed items out.
+    filter?: string;
     onProgress?: (message: string) => void;
   } = {},
 ): Promise<{ items: SavedItem[]; users: Map<string, SlackUser> }> {
@@ -322,6 +361,93 @@ export async function updateSavedItem(
   const response = await client.updateSavedItem(channelId, timestamp, update);
   const todoState = 'todo_state' in update ? update.todo_state : undefined;
   return writeResult(response, channelId, timestamp, { todo_state: todoState, date_due: update.date_due });
+}
+
+// --- Reminder rows: named by their Later id (Sa...), they have no message ts --
+
+export interface SavedReminderResult {
+  item_id: string;
+  text?: string;
+  todo_state?: string;
+  date_due: number;
+}
+
+// How many times to look for a new reminder on the Later list, and the wait
+// between looks: the row shows up shortly after reminders.add answers.
+const NEW_REMINDER_LOOKS = 5;
+const NEW_REMINDER_WAIT_MS = 1000;
+
+export function assertReminderId(itemId: string): void {
+  if (!/^Sa[A-Za-z0-9]+$/.test(itemId)) {
+    throw new InvalidInputError(`--item-id must be a Later item id starting with Sa, as saved list prints it; got "${itemId}".`);
+  }
+}
+
+// `saved update --text`: Slack changes a reminder's words through `description`,
+// a JSON string of rich_text blocks. It answers ok to other field names and
+// changes nothing, so this is the only form sent.
+export function reminderTextUpdate(
+  options: { text: string; state?: string; due?: string | false },
+): { description: string } {
+  if (options.state !== undefined || options.due !== undefined) {
+    throw new InvalidInputError('--text changes the words only; drop --state, --due and --no-due, and change those in a second call.');
+  }
+  if (options.text.trim() === '') {
+    throw new InvalidInputError('--text must not be empty.');
+  }
+  return {
+    description: JSON.stringify([{
+      type: 'rich_text',
+      elements: [{ type: 'rich_text_section', elements: [{ type: 'text', text: options.text }] }],
+    }]),
+  };
+}
+
+export async function updateSavedReminder(
+  client: Pick<SlackClient, 'updateSavedReminder'>,
+  itemId: string,
+  update: SavedItemUpdate | { description: string },
+): Promise<SavedReminderResult> {
+  const response = await client.updateSavedReminder(itemId, update);
+  const item = response?.item ?? {};
+  const sentDue = 'date_due' in update ? update.date_due : 0;
+  const sentState = 'todo_state' in update ? update.todo_state : undefined;
+  return {
+    item_id: itemId,
+    todo_state: item.todo_state ?? sentState,
+    date_due: typeof item.date_due === 'number' ? item.date_due : sentDue,
+  };
+}
+
+export async function removeSavedReminder(
+  client: Pick<SlackClient, 'deleteSavedReminder'>,
+  itemId: string,
+): Promise<{ item_id: string; removed: true }> {
+  await client.deleteSavedReminder(itemId);
+  return { item_id: itemId, removed: true };
+}
+
+// `saved add --text`: reminders.add answers with an Rm... id that no saved.*
+// method takes, so find the row it made. Same text and newest wins.
+export async function addSavedReminder(
+  client: Pick<SlackClient, 'addReminder' | 'listSavedItems'>,
+  text: string,
+  dateDue: number,
+  sleep: (ms: number) => Promise<unknown> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+): Promise<SavedReminderResult> {
+  await client.addReminder(text, dateDue);
+  for (let look = 0; look < NEW_REMINDER_LOOKS; look++) {
+    if (look > 0) await sleep(NEW_REMINDER_WAIT_MS);
+    const response = await client.listSavedItems({ count: PAGE_SIZE });
+    const rows = (response.saved_items ?? []).filter(
+      (row: any) => row.item_type === 'reminder' && descriptionText(row.description) === text,
+    );
+    if (rows.length > 0) {
+      const row = rows.reduce((a: any, b: any) => (b.date_created > a.date_created ? b : a));
+      return { item_id: row.item_id, text, todo_state: row.todo_state, date_due: row.date_due ?? dateDue };
+    }
+  }
+  throw new Error('Slack created the reminder but its row did not show on the Later list; check saved list before adding it again.');
 }
 
 // Remove an item from the Later list. Not idempotent: Slack's answer for an
