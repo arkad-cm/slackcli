@@ -152,6 +152,8 @@ slackcli saved remove --item-id=Sa0ABC123 --yes
   or `--no-due`.
 - `--no-due` also moves a reminder from To-dos to Saved: Slack keeps no to-do
   without a due date here.
+- `saved reopen --item-id` sets the due date to the current time, so the old due
+  date is lost.
 - `--item-id` replaces `--channel-id`, `--timestamp` and `--permalink`.
 - A changed due date moves the reminder's notification. Completing or removing
   the reminder before it is due stops the notification.

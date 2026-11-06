@@ -2,6 +2,7 @@
 // exact change sent, the --json shape, and the flag combinations refused.
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import * as authLib from '../lib/auth.ts';
+import { addSavedReminder } from '../lib/saved.ts';
 import { createSavedCommand } from './saved.ts';
 
 const ID = 'Sa0ABC123';
@@ -11,8 +12,10 @@ const description = (text: string) => [{
   elements: [{ type: 'rich_text_section', elements: [{ type: 'text', text }] }],
 }];
 
-function client(listed: unknown[] = []) {
+// listedByLook: what each saved.list call answers in turn; the last one repeats.
+function client(listedByLook: unknown[][] = [[]]) {
   const calls: Array<[string, unknown[]]> = [];
+  let looks = 0;
   return {
     calls,
     stub: {
@@ -32,7 +35,10 @@ function client(listed: unknown[] = []) {
         calls.push(['addReminder', [text, time]]);
         return { ok: true, reminder: { id: 'Rm1', text, time } };
       },
-      listSavedItems: async () => ({ saved_items: listed }),
+      listSavedItems: async () => {
+        calls.push(['listSavedItems', []]);
+        return { saved_items: listedByLook[Math.min(looks++, listedByLook.length - 1)] };
+      },
     },
   };
 }
@@ -97,6 +103,8 @@ describe('saved writes on reminders (command)', () => {
   it.each([
     ['--text without --item-id', ['update', '--channel-id', 'C1', '--timestamp', '1.1', '--text', 'x']],
     ['--text with --due', ['update', '--item-id', ID, '--text', 'x', '--due', String(DUE)]],
+    ['--text with --no-due', ['update', '--item-id', ID, '--text', 'x', '--no-due']],
+    ['--text with --state', ['update', '--item-id', ID, '--text', 'x', '--state', 'saved']],
     ['empty --text', ['update', '--item-id', ID, '--text', '  ']],
     ['--item-id with --timestamp', ['complete', '--item-id', ID, '--timestamp', '1.1']],
     ['--item-id that is not a Later id', ['complete', '--item-id', 'C0123']],
@@ -125,12 +133,19 @@ describe('saved writes on reminders (command)', () => {
 
     const [, [, update]] = calls[0] as [string, [string, any]];
     expect(update).toMatchObject({ mark: 'uncompleted', todo_state: 'to_do' });
+    expect(Math.abs(update.date_due - Date.now() / 1000)).toBeLessThan(5);
   });
 
   it('remove --item-id needs --yes, then deletes that row only', async () => {
     const refused = client();
+    const savedTty = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
     Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true });
-    await run(refused.stub, ['remove', '--item-id', ID, '--json']);
+    try {
+      await run(refused.stub, ['remove', '--item-id', ID, '--json']);
+    } finally {
+      if (savedTty) Object.defineProperty(process.stdin, 'isTTY', savedTty);
+      else delete (process.stdin as any).isTTY;
+    }
     expect(process.exitCode).toBe(1);
     expect(refused.calls).toEqual([]);
 
@@ -152,16 +167,17 @@ describe('saved writes on reminders (command)', () => {
   });
 
   it('add --text --due creates a reminder and reports its Later id', async () => {
+    const old = { item_type: 'reminder', item_id: 'SaOLD', date_created: 1, description: description('Call back') };
     const { stub, calls } = client([
-      { item_type: 'reminder', item_id: 'SaOLD', date_created: 1, description: description('Call back') },
-      { item_type: 'reminder', item_id: ID, date_created: 2, date_due: DUE, todo_state: 'to_do', description: description('Call back') },
+      [old],
+      [old, { item_type: 'reminder', item_id: ID, date_created: 2, date_due: DUE + 5, todo_state: 'to_do', description: description('Call back') }],
     ]);
 
     await run(stub, ['add', '--text', 'Call back', '--due', String(DUE), '--json']);
 
     expect(process.exitCode).toBe(0);
-    expect(calls).toEqual([['addReminder', ['Call back', DUE]]]);
-    expect(JSON.parse(stdout)).toEqual({ item_id: ID, text: 'Call back', todo_state: 'to_do', date_due: DUE });
+    expect(calls).toEqual([['listSavedItems', []], ['addReminder', ['Call back', DUE]], ['listSavedItems', []]]);
+    expect(JSON.parse(stdout)).toEqual({ item_id: ID, text: 'Call back', todo_state: 'to_do', date_due: DUE + 5 });
   });
 
   it('add --text refuses a message target', async () => {
@@ -170,6 +186,43 @@ describe('saved writes on reminders (command)', () => {
     await run(stub, ['add', '--text', 'x', '--channel-id', 'C1', '--timestamp', '1.1', '--json']);
 
     expect(process.exitCode).toBe(1);
+    expect(calls).toEqual([]);
+  });
+});
+
+describe('addSavedReminder: finding the row it made', () => {
+  const row = (item_id: string, date_created: number) => ({
+    item_type: 'reminder', item_id, date_created, date_due: DUE, todo_state: 'to_do', description: description('Call back'),
+  });
+  const noWait = async () => {};
+
+  it('skips an older row with the same words while the new row lags', async () => {
+    const { stub } = client([[row('SaOLD', 1)], [row('SaOLD', 1)], [row('SaOLD', 1), row('SaNEW', 2)]]);
+
+    const result = await addSavedReminder(stub as any, 'Call back', DUE, noWait);
+
+    expect(result.item_id).toBe('SaNEW');
+  });
+
+  it('skips an older row even when its date_created is the larger one', async () => {
+    const { stub } = client([[row('SaOLD', 9)], [row('SaOLD', 9), row('SaNEW', 2)]]);
+
+    const result = await addSavedReminder(stub as any, 'Call back', DUE, noWait);
+
+    expect(result.item_id).toBe('SaNEW');
+  });
+
+  it('throws when only the older row ever shows', async () => {
+    const { stub } = client([[row('SaOLD', 1)]]);
+
+    await expect(addSavedReminder(stub as any, 'Call back', DUE, noWait)).rejects.toThrow('did not show');
+  });
+
+  it('creates nothing when the list cannot be read first', async () => {
+    const { stub, calls } = client();
+    stub.listSavedItems = async () => { throw new Error('list down'); };
+
+    await expect(addSavedReminder(stub as any, 'Call back', DUE, noWait)).rejects.toThrow('list down');
     expect(calls).toEqual([]);
   });
 });

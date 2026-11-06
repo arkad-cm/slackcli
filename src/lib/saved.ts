@@ -428,19 +428,22 @@ export async function removeSavedReminder(
 }
 
 // `saved add --text`: reminders.add answers with an Rm... id that no saved.*
-// method takes, so find the row it made. Same text and newest wins.
+// method takes, so find the row it made: same text, and not on the list before
+// the add. Text alone is not enough, as an older row can carry the same words.
 export async function addSavedReminder(
   client: Pick<SlackClient, 'addReminder' | 'listSavedItems'>,
   text: string,
   dateDue: number,
   sleep: (ms: number) => Promise<unknown> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 ): Promise<SavedReminderResult> {
+  const before = await client.listSavedItems({ count: PAGE_SIZE });
+  const existing = new Set((before.saved_items ?? []).map((row: any) => row.item_id));
   await client.addReminder(text, dateDue);
   for (let look = 0; look < NEW_REMINDER_LOOKS; look++) {
     if (look > 0) await sleep(NEW_REMINDER_WAIT_MS);
     const response = await client.listSavedItems({ count: PAGE_SIZE });
     const rows = (response.saved_items ?? []).filter(
-      (row: any) => row.item_type === 'reminder' && descriptionText(row.description) === text,
+      (row: any) => row.item_type === 'reminder' && !existing.has(row.item_id) && descriptionText(row.description) === text,
     );
     if (rows.length > 0) {
       const row = rows.reduce((a: any, b: any) => (b.date_created > a.date_created ? b : a));
