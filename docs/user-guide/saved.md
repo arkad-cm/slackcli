@@ -156,9 +156,11 @@ slackcli saved remove --item-id=Sa0ABC123 --yes
   a reopened reminder is due when it was due before.
 - `--item-id` replaces `--channel-id`, `--timestamp` and `--permalink`.
 - A changed due date moves the reminder's notification. A reminder that is
-  completed or removed at its due time does not notify.
-- Reopening a reminder notifies at its due date. If that date has passed, it
-  notifies once, soon after the reopen.
+  completed or removed before its due time adds no Activity entry at that time.
+- A reopened reminder adds its Activity entry at its due date. If that date has
+  passed, the entry appears within about 20 seconds of the reopen. To avoid
+  that, set a new date with `saved update --due` right after the reopen. These
+  timings come from one live test that watched Activity for about 2 minutes.
 
 ## `saved remove`
 

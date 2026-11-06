@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Reminder rows on the Later list**: `saved list` prints `item_id`, `text`, `date_due` and the state of to-dos made from text. `saved add --text` adds one. `saved update`, `saved complete`, `saved reopen` and `saved remove` change one with `--item-id`. `saved complete` and `saved reopen` keep the due date. A reminder that is completed at its due time does not notify, and reopening one after its due date notifies once (#511)
+- **Reminder rows on the Later list**: `saved list` prints `item_id`, `text`, `date_due` and the state of to-dos made from text. `saved add --text` adds one. `saved update`, `saved complete`, `saved reopen` and `saved remove` change one with `--item-id`. `saved complete` and `saved reopen` keep the due date. A reminder completed or removed before its due time adds no Activity entry, and reopening one after its due date adds an entry within about 20 seconds (#511)
 
 ## [0.19.0] - 2026-11-01
 

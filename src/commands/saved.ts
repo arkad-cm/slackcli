@@ -139,7 +139,7 @@ const HELP = {
       MESSAGE_ID_FORMATS_NOTE,
       CHANNEL_NAME_NOTE,
       PERMALINK_MESSAGE_NOTE,
-      'With --item-id the reminder keeps its due date and does not notify while completed.',
+      'With --item-id the reminder keeps its due date. Completed before that date, it adds no Activity entry then.',
       NO_PROMPT_NOTE,
     ],
   },
@@ -160,7 +160,7 @@ const HELP = {
       CHANNEL_NAME_NOTE,
       PERMALINK_MESSAGE_NOTE,
       'To set another due date afterwards, use saved update --due.',
-      'With --item-id the reminder keeps its due date. If that date has passed, Slack notifies once, soon after.',
+      'With --item-id the reminder keeps its due date. If that date has passed, an Activity entry appears within seconds.',
       NO_PROMPT_NOTE,
     ],
   },
@@ -233,7 +233,10 @@ function reportReminderWrite(result: SavedReminderResult, json: boolean): void {
     writeJson(result);
     return;
   }
-  const due = result.date_due > 0 ? `due ${formatScheduleTime(result.date_due)}` : 'no due date';
+  let due = 'due date not reported';
+  if (result.date_due !== undefined) {
+    due = result.date_due > 0 ? `due ${formatScheduleTime(result.date_due)}` : 'no due date';
+  }
   success(`Reminder ${result.item_id}: ${result.todo_state ?? 'unknown state'}, ${due}`);
 }
 

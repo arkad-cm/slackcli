@@ -374,7 +374,8 @@ export interface SavedReminderResult {
   item_id: string;
   text?: string;
   todo_state?: string;
-  date_due: number;
+  // Absent when a change sent no date and Slack did not return one.
+  date_due?: number;
 }
 
 // How many times to look for a new reminder on the Later list, and the wait
@@ -415,7 +416,7 @@ export async function updateSavedReminder(
 ): Promise<SavedReminderResult> {
   const response = await client.updateSavedReminder(itemId, update);
   const item = response?.item ?? {};
-  const sentDue = 'date_due' in update ? update.date_due : 0;
+  const sentDue = 'date_due' in update ? update.date_due : undefined;
   const sentState = 'todo_state' in update ? update.todo_state : undefined;
   return {
     item_id: itemId,

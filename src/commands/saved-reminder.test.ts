@@ -2,7 +2,7 @@
 // exact change sent, the --json shape, and the flag combinations refused.
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import * as authLib from '../lib/auth.ts';
-import { addSavedReminder } from '../lib/saved.ts';
+import { addSavedReminder, REOPEN_REMINDER_UPDATE, updateSavedReminder } from '../lib/saved.ts';
 import { createSavedCommand } from './saved.ts';
 
 const ID = 'Sa0ABC123';
@@ -124,6 +124,22 @@ describe('saved writes on reminders (command)', () => {
 
     // No date_due: a 0 here is what made the old date unrecoverable on reopen.
     expect(calls).toEqual([['updateSavedReminder', [ID, { mark: 'completed', todo_state: 'completed' }]]]);
+    expect(JSON.parse(stdout)).toEqual({ item_id: ID, todo_state: 'completed', date_due: DUE });
+  });
+
+  it('reports no date, not "no due date", when Slack omits it on a change that sent none', async () => {
+    const stub = {
+      updateSavedReminder: async () => ({ ok: true, item: { todo_state: 'to_do' } }),
+    };
+
+    const result = await updateSavedReminder(stub as any, ID, REOPEN_REMINDER_UPDATE);
+
+    expect('date_due' in result && result.date_due !== undefined).toBe(false);
+
+    await run({ ...client().stub, ...stub }, ['reopen', '--item-id', ID]);
+
+    expect(stdout).toContain('due date not reported');
+    expect(stdout).not.toContain('no due date');
   });
 
   it('reopen --item-id sends no date, so the row keeps the one it has', async () => {
