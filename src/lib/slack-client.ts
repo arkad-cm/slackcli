@@ -8,6 +8,7 @@ import type {
   SlackAuthTestResponse,
   ScheduledMessageSummary,
   SavedItemUpdate,
+  SavedReminderUpdate,
   SlackDraftListResponse,
   SlackScheduledMessage,
   SlackScheduledMessageListResponse,
@@ -942,7 +943,7 @@ export class SlackClient {
 
   // Change one reminder row on the Later list, named by its Sa... id; these
   // rows have no message timestamp. Browser auth only.
-  async updateSavedReminder(itemId: string, update: SavedItemUpdate | { description: string }): Promise<any> {
+  async updateSavedReminder(itemId: string, update: SavedReminderUpdate): Promise<any> {
     this.requireBrowserAuth(SAVED_WRITE_AUTH_MESSAGE);
     return this.request('saved.update', { ...savedReminderParams(itemId), ...update });
   }

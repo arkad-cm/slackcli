@@ -357,6 +357,13 @@ export type SavedItemUpdate =
   | { mark: 'completed'; todo_state: 'completed'; date_due: 0 }
   | { mark: 'uncompleted'; todo_state: 'to_do'; date_due: number };
 
+// A reminder row can also change its words, or change state and keep its date.
+export type SavedReminderUpdate =
+  | SavedItemUpdate
+  | { description: string }
+  | { mark: 'completed'; todo_state: 'completed' }
+  | { mark: 'uncompleted'; todo_state: 'to_do' };
+
 // Search results
 export interface SearchMatch {
   ts: string;

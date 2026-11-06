@@ -11,7 +11,9 @@ import {
   addSavedItem,
   addSavedReminder,
   assertReminderId,
+  COMPLETE_REMINDER_UPDATE,
   COMPLETE_UPDATE,
+  REOPEN_REMINDER_UPDATE,
   enrichSavedItems,
   reminderTextUpdate,
   removeSavedItem,
@@ -137,6 +139,7 @@ const HELP = {
       MESSAGE_ID_FORMATS_NOTE,
       CHANNEL_NAME_NOTE,
       PERMALINK_MESSAGE_NOTE,
+      'With --item-id the reminder keeps its due date and does not notify while completed.',
       NO_PROMPT_NOTE,
     ],
   },
@@ -157,6 +160,7 @@ const HELP = {
       CHANNEL_NAME_NOTE,
       PERMALINK_MESSAGE_NOTE,
       'To set another due date afterwards, use saved update --due.',
+      'With --item-id the reminder keeps its due date. If that date has passed, Slack notifies once, soon after.',
       NO_PROMPT_NOTE,
     ],
   },
@@ -444,7 +448,7 @@ export function createSavedCommand(): Command {
 
       try {
         if (options.itemId) {
-          await runReminderUpdate(options, spinner, 'complete reminder', 'Reminder completed', () => COMPLETE_UPDATE);
+          await runReminderUpdate(options, spinner, 'complete reminder', 'Reminder completed', () => COMPLETE_REMINDER_UPDATE);
           return;
         }
 
@@ -487,7 +491,7 @@ export function createSavedCommand(): Command {
 
       try {
         if (options.itemId) {
-          await runReminderUpdate(options, spinner, 'reopen reminder', 'Reminder reopened', () => reopenUpdate());
+          await runReminderUpdate(options, spinner, 'reopen reminder', 'Reminder reopened', () => REOPEN_REMINDER_UPDATE);
           return;
         }
 

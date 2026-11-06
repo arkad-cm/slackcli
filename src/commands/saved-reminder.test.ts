@@ -122,18 +122,16 @@ describe('saved writes on reminders (command)', () => {
 
     await run(stub, ['complete', '--item-id', ID, '--json']);
 
-    expect(calls).toEqual([['updateSavedReminder', [ID, { mark: 'completed', todo_state: 'completed', date_due: 0 }]]]);
-    expect(JSON.parse(stdout)).toEqual({ item_id: ID, todo_state: 'completed', date_due: 0 });
+    // No date_due: a 0 here is what made the old date unrecoverable on reopen.
+    expect(calls).toEqual([['updateSavedReminder', [ID, { mark: 'completed', todo_state: 'completed' }]]]);
   });
 
-  it('reopen --item-id sends the uncompleted change', async () => {
+  it('reopen --item-id sends no date, so the row keeps the one it has', async () => {
     const { stub, calls } = client();
 
     await run(stub, ['reopen', '--item-id', ID, '--json']);
 
-    const [, [, update]] = calls[0] as [string, [string, any]];
-    expect(update).toMatchObject({ mark: 'uncompleted', todo_state: 'to_do' });
-    expect(Math.abs(update.date_due - Date.now() / 1000)).toBeLessThan(5);
+    expect(calls).toEqual([['updateSavedReminder', [ID, { mark: 'uncompleted', todo_state: 'to_do' }]]]);
   });
 
   it('remove --item-id needs --yes, then deletes that row only', async () => {

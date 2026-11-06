@@ -1,5 +1,5 @@
 import type { SlackClient } from './slack-client.ts';
-import type { SavedItem, SavedItemUpdate, SlackUser } from '../types/index.ts';
+import type { SavedItem, SavedItemUpdate, SavedReminderUpdate, SlackUser } from '../types/index.ts';
 import { InvalidInputError } from './cli-errors.ts';
 import { parseDueTime } from './schedule-time.ts';
 
@@ -288,6 +288,11 @@ export function addDueDate(due: string | undefined, nowMs: number = Date.now()):
   return due === undefined ? nowSeconds(nowMs) : parseDueTime(due);
 }
 
+// A reminder row keeps its date through complete and reopen: no date_due is
+// sent, so a reopened row is due when it was due before.
+export const COMPLETE_REMINDER_UPDATE: SavedReminderUpdate = { mark: 'completed', todo_state: 'completed' };
+export const REOPEN_REMINDER_UPDATE: SavedReminderUpdate = { mark: 'uncompleted', todo_state: 'to_do' };
+
 // A reopened item goes back to To-dos, due now, as in the Slack web client.
 export function reopenUpdate(nowMs: number = Date.now()): SavedItemUpdate {
   return { mark: 'uncompleted', todo_state: 'to_do', date_due: nowSeconds(nowMs) };
@@ -406,7 +411,7 @@ export function reminderTextUpdate(
 export async function updateSavedReminder(
   client: Pick<SlackClient, 'updateSavedReminder'>,
   itemId: string,
-  update: SavedItemUpdate | { description: string },
+  update: SavedReminderUpdate,
 ): Promise<SavedReminderResult> {
   const response = await client.updateSavedReminder(itemId, update);
   const item = response?.item ?? {};
