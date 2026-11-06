@@ -160,7 +160,7 @@ const HELP = {
       CHANNEL_NAME_NOTE,
       PERMALINK_MESSAGE_NOTE,
       'To set another due date afterwards, use saved update --due.',
-      'With --item-id the reminder keeps its due date. If that date has passed, an Activity entry appears within seconds.',
+      'With --item-id the reminder keeps its due date. If that date has passed, an Activity entry appears within about 20 seconds.',
       NO_PROMPT_NOTE,
     ],
   },

@@ -142,6 +142,16 @@ describe('saved writes on reminders (command)', () => {
     expect(stdout).not.toContain('no due date');
   });
 
+  it('leaves date_due out of --json when Slack omits it on a change that sent none', async () => {
+    const stub = {
+      updateSavedReminder: async () => ({ ok: true, item: { todo_state: 'to_do' } }),
+    };
+
+    await run({ ...client().stub, ...stub }, ['reopen', '--item-id', ID, '--json']);
+
+    expect(JSON.parse(stdout)).toEqual({ item_id: ID, todo_state: 'to_do' });
+  });
+
   it('reopen --item-id sends no date, so the row keeps the one it has', async () => {
     const { stub, calls } = client();
 
