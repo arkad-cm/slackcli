@@ -218,8 +218,9 @@ const HELP = {
     examples: [
       'slackcli messages draft --recipient-id C0123456789 --message "Release notes for review"',
       'slackcli messages draft --permalink https://acme.slack.com/archives/C0123456789/p1712345678123456 --message-file ./reply.md --json',
+      'slackcli messages draft --recipient-id C0123456789 --message "Report attached" --file report.csv --file chart.png',
     ],
-    json: '{ channel_id, draft_id, thread_ts? } (thread_ts only for a threaded draft).',
+    json: '{ channel_id, draft_id, thread_ts?, file_ids? } (thread_ts only for a threaded draft, file_ids only with --file).',
     browserOnly: true,
     notes: [
       RECIPIENT_NOTE,
@@ -231,6 +232,8 @@ const HELP = {
       REPLY_LINK_NOTE,
       MESSAGE_TEXT_NOTE,
       STDIN_NOTE,
+      '--file is repeatable. Each file uploads private to you (shared nowhere) and the draft lists it; ' +
+        'it posts only when someone sends the draft. send-draft refuses drafts with files: send those from the Slack composer.',
       'Creates the draft immediately, with no confirmation prompt.',
     ],
     dryRun: true,
@@ -1015,6 +1018,12 @@ export function createMessagesCommand(): Command {
     )
     .option('--thread-ts <timestamp>', 'Thread to draft a reply in (1234567890.123456 or p1234567890123456)')
     .option('--permalink <url>', 'Slack message link; drafts a reply in that message\'s thread (replaces --recipient-id and --thread-ts)')
+    .addOption(
+      // Repeatable, like send --file. Files upload private (not shared) and the
+      // draft references them; they post only when the draft is sent.
+      new Option('--file <path>', 'Attach a file to the draft (repeatable)')
+        .argParser<string[]>((value, previous) => (previous ?? []).concat([value]))
+    )
     .option('--workspace <id|name>', 'Workspace to use')
     .option('--json', 'Output the created draft as JSON', false)
     .option(DRY_RUN_FLAG, DRY_RUN_DESCRIPTION, false)
@@ -1023,23 +1032,38 @@ export function createMessagesCommand(): Command {
 
       try {
         const message = await resolveMessageText(options);
+        const filePaths: string[] | undefined = options.file;
         const { client, recipientId, target } = await resolveRecipient(options, spinner);
 
         if (options.dryRun) {
           client.requireBrowserAuth(DRAFT_CREATE_AUTH_MESSAGE);
           spinner.stop();
           emitDryRun(
-            await buildPreview(client, 'create draft', recipientTarget(recipientId, target.threadTs), { text: message }, { lookupName: true }),
+            await buildPreview(
+              client,
+              'create draft',
+              recipientTarget(recipientId, target.threadTs),
+              filePaths ? { text: message, files: filePaths } : { text: message },
+              { lookupName: true },
+            ),
             options.json,
           );
           return;
         }
 
+        client.requireBrowserAuth(DRAFT_CREATE_AUTH_MESSAGE);
         const channelId = await openRecipient(client, recipientId, spinner);
+
+        let fileIds: string[] | undefined;
+        if (filePaths) {
+          spinner.text = 'Uploading files...';
+          fileIds = await client.uploadFilesPrivate(filePaths);
+        }
 
         spinner.text = 'Creating draft...';
         const response = await client.createDraft(channelId, message, {
           thread_ts: target.threadTs,
+          file_ids: fileIds,
         });
 
         spinner.succeed('Draft created successfully!');
@@ -1050,6 +1074,7 @@ export function createMessagesCommand(): Command {
             channel_id: channelId,
             draft_id: response.draft.id,
             ...(target.threadTs ? { thread_ts: target.threadTs } : {}),
+            ...(fileIds ? { file_ids: fileIds } : {}),
           });
         } else {
           success(`Draft ID: ${response.draft.id}`);

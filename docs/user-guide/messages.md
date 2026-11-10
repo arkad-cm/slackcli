@@ -371,6 +371,17 @@ slackcli messages draft --recipient-id=C1234567890 --message="Hello team!"
 Creates an unsent draft in the Slack client — useful when you want a human to
 review and press send.
 
+Attach files with `--file` (repeatable):
+
+```bash
+slackcli messages draft --recipient-id=C1234567890 --message="Report attached" --file=report.csv --file=chart.png --json
+```
+
+Each file is uploaded private to you and shared nowhere; the draft references it,
+and it posts only when the draft is sent. `--json` adds `file_ids`. If any path is
+missing or an upload fails, no draft is created. `send-draft` refuses drafts with
+files, so send those from the Slack composer.
+
 To send a reviewed draft or discard it:
 
 ```bash

@@ -781,7 +781,67 @@ describe('SlackClient.getUnreadThreadView', () => {
   });
 });
 
+describe('SlackClient.uploadFilesPrivate', () => {
+  it('uploads files and completes them with no channel, so nothing is shared', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'slackcli-private-upload-'));
+    const a = join(dir, 'a.csv');
+    const b = join(dir, 'b.txt');
+    await Bun.write(a, 'x,y');
+    await Bun.write(b, 'bravo');
+    globalThis.fetch = (async (_input, _init) => new Response('', { status: 200 })) as typeof fetch;
+
+    try {
+      const client = new TestSlackClient();
+      const ids = await client.uploadFilesPrivate([a, b]);
+
+      expect(ids).toEqual(['F1', 'F2']);
+      expect(client.calls).toEqual([
+        { method: 'files.getUploadURLExternal', params: { filename: 'a.csv', length: 3 } },
+        { method: 'files.getUploadURLExternal', params: { filename: 'b.txt', length: 5 } },
+        {
+          method: 'files.completeUploadExternal',
+          params: { files: JSON.stringify([{ id: 'F1', title: 'a.csv' }, { id: 'F2', title: 'b.txt' }]) },
+        },
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects an empty file list before any Slack call', async () => {
+    const client = new TestSlackClient();
+    await expect(client.uploadFilesPrivate([])).rejects.toThrow('No files to upload');
+    expect(client.calls).toEqual([]);
+  });
+
+  it('does not complete any upload when one path is missing', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'slackcli-private-upload-'));
+    const good = join(dir, 'good.txt');
+    await Bun.write(good, 'ok');
+    try {
+      const client = new TestSlackClient();
+      await expect(client.uploadFilesPrivate([good, join(dir, 'nope.txt')])).rejects.toThrow();
+      expect(client.calls.some((c) => c.method === 'files.completeUploadExternal')).toBe(false);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('SlackClient.createDraft', () => {
+  it('sends an empty file_ids list when no files are attached', async () => {
+    const client = new TestSlackClient();
+    await client.createDraft('C123', 'hi');
+    expect(client.calls[0]?.params.file_ids).toBe('[]');
+  });
+
+  it('lists attached file ids in file_ids', async () => {
+    const client = new TestSlackClient();
+    await client.createDraft('C123', 'see file', { file_ids: ['F1', 'F2'] });
+    expect(client.calls[0]?.params.file_ids).toBe('["F1","F2"]');
+  });
+
   it('sends mentions and links as rich_text elements, not literal text', async () => {
     const client = new TestSlackClient();
 

@@ -683,6 +683,29 @@ export class SlackClient {
     initial_comment?: string;
     thread_ts?: string;
   } = {}): Promise<ExternalUploadCompleteResponse> {
+    const uploaded = await this.putUploadTickets(filePaths);
+
+    const params: Record<string, string> = {
+      files: JSON.stringify(uploaded),
+      channel_id: channel,
+    };
+    if (options.initial_comment) params.initial_comment = options.initial_comment;
+    if (options.thread_ts) params.thread_ts = options.thread_ts;
+
+    return this.request('files.completeUploadExternal', params);
+  }
+
+  // Upload files WITHOUT sharing them anywhere, for a draft to reference.
+  // completeUploadExternal with no channel_id leaves each file private to the
+  // uploader; drafts.create then lists the ids in file_ids, the way the Slack
+  // composer attaches a file to an unsent draft. Nothing is posted.
+  async uploadFilesPrivate(filePaths: string[]): Promise<string[]> {
+    const uploaded = await this.putUploadTickets(filePaths);
+    await this.request('files.completeUploadExternal', { files: JSON.stringify(uploaded) });
+    return uploaded.map((file) => file.id);
+  }
+
+  private async putUploadTickets(filePaths: string[]): Promise<Array<{ id: string; title: string }>> {
     if (filePaths.length === 0) {
       throw new InvalidInputError('No files to upload');
     }
@@ -739,19 +762,13 @@ export class SlackClient {
       uploaded.push({ id: uploadUrlResponse.file_id, title: filename });
     }
 
-    const params: Record<string, string> = {
-      files: JSON.stringify(uploaded),
-      channel_id: channel,
-    };
-    if (options.initial_comment) params.initial_comment = options.initial_comment;
-    if (options.thread_ts) params.thread_ts = options.thread_ts;
-
-    return this.request('files.completeUploadExternal', params);
+    return uploaded;
   }
 
   // Create draft message
   async createDraft(channelId: string, text: string, options: {
     thread_ts?: string;
+    file_ids?: string[];
   } = {}): Promise<any> {
     this.requireBrowserAuth(DRAFT_CREATE_AUTH_MESSAGE);
 
@@ -765,7 +782,7 @@ export class SlackClient {
       client_msg_id: crypto.randomUUID(),
       blocks: JSON.stringify(parseMrkdwn(text)),
       destinations: JSON.stringify(destinations),
-      file_ids: '[]',
+      file_ids: JSON.stringify(options.file_ids ?? []),
       is_from_composer: 'false',
     };
 
