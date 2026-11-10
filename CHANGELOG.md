@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Reminder rows on the Later list**: `saved list` prints `item_id`, `text`, `date_due` and the state of to-dos made from text. `saved add --text` adds one. `saved update`, `saved complete`, `saved reopen` and `saved remove` change one with `--item-id`. `saved complete` and `saved reopen` keep the due date. A reminder completed or removed before its due time adds no Activity entry, and reopening one after its due date adds an entry within about 20 seconds (#511)
-- **Files on drafts**: `messages draft --file <path>` (repeatable) attaches files to an unsent draft. Files upload private and post only when the draft is sent
+- **Files on drafts**: `messages draft --file <path>` (repeatable) attaches files to an unsent draft. Files upload private and post only when the draft is sent (#507)
 
 ## [0.19.0] - 2026-11-01
 
